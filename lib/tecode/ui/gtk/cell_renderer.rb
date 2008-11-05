@@ -30,12 +30,17 @@ module Gtk
 
   ENTRY = ::Gtk::Entry.new
 
-  class IndexedCellRenderer < ::Gtk::CellRendererText
-    attr_accessor :index
+  # This class provides a set of standard behavior for
+  # Gtk::CellRenderers that can be easily applied to custom
+  # Ruby classes derived from Gtk::CellRenderer and friends.
 
-    def initialize(treeview, idx)
+  module CellRendererHelper
+    attr_reader   :column_index
+
+    def initialize(col_index, table_view)
       super()
-      @index = idx
+      @column_index = col_index
+      @table_view = table_view
     end
 
     def editable=(val)
@@ -50,220 +55,87 @@ module Gtk
     end
   end
 
-  class Widget
-    attr_reader :widget
+  class CompletionCellRendererText < ::Gtk::CellRendererText
+    include CellRendererHelper
+    attr_accessor :editing_path, :completion
     
-    def initialize(widget)
-      @widget = widget
-    end
-  end
+    def initialize(col_index, table_view, gtk_treeview)
+      super(col_index, table_view)
+      self.yalign = 0
+      self.single_paragraph_mode = false
+      self.wrap_width = 250
+      self.editable = table_view.model.is_column_editable? col_index
+     
+      # take care of the signal handlers
+      self.signal_connect("editing-started") do |sender, editable, path|
+        next if !table_view.model.editable? || !table_view.model.column_is_editable?(col_index) || !editable?
 
-  class FormField < Widget
-    attr_accessor :label, :widget_class, :field_widget, :label_widget
+        sender.editing_path = path
+        path = ::Gtk::TreePath.new(path)
+        row = path.indices[0]
 
-    def initialize(label, widget = ::Gtk::Entry.new)
-      super(widget)
-      @label = label
-      @label_widget = ::Gtk::Label.new("#{label}:")
-      @field_widget = widget
-      @dirty = false
-      @editable = true
-    end
-
-    def editable?
-      @editable
-    end
-
-    def editable=(val)
-      @editable = val
-      ::Gtk.queue do
-        if editable?
-          field_widget.sensitive = false
-          field_widget.editable = false
-        else
-          field_widget.sensitive = true
-          field_widget.editable = true
+        if gtk_treeview.selection.selected_rows.size > 0
+          gtk_treeview.selection.unselect_all
+          gtk_treeview.selection.select_path(path)
         end
-      end
-    end
 
-    def dirty?
-      @dirty
-    end
-
-    def text
-      ::Gtk.queue { @widget.text }
-    end
-
-    def text=(val)
-      val = val.to_s
-      ::Gtk.queue do
-        if val != @widget.text
-          @dirty = true
+        if sender.editable? && row == table_view.model.size
+          table_view.model.new_row_at(row)
         end
-        @widget.text = val
-      end
-    end
 
-    def show_all
-      @label_widget.show
-      @field_widget.show
-    end
-
-    # This is a bit of a hack, but...
-
-    def signal_connect(signal, &block)
-      __internal_signal_connect(widget, signal, &block)
-    end
-
-    alias sensitive= editable=
-    alias sensitive? editable?
-
-  protected
-    def __internal_signal_connect(widget, signal, &block)
-      widget.signal_connect(signal) do |*args|
-        block.call(self, *args)
-      end
-    end
-  end
-
-  class ComboFormField < FormField
-    def initialize(label)
-      super(label, ::Gtk::ComboBoxEntry.new)
-      @combo_model = ::Gtk::ListStore.new(String)
-      widget.model = @combo_model
-      widget.child.completion = ::Gtk::EntryCompletion.new
-      widget.child.completion.model = widget.model
-      widget.child.completion.text_column = 0
-      widget.child.completion.inline_completion = true
-
-      @choices = []
-    end
-
-    def text
-      ::Gtk.queue { widget.child.text }
-    end
-
-    def text=(val)
-      val = val.to_s
-      ::Gtk.queue do
-        if val != widget.child.text
-          @dirty = true
-          widget.child.text = val
-        end
-      end
-    end
-
-    def choices=(choices)
-      ::Gtk.queue do
-        widget.model.clear
-        choices.each { |c| widget.append_text(c) }
-        widget.child.text = "" if !choices.include? widget.child.text
-        @choices = choices
-      end
-    end
-
-    def choices
-      @choices
-    end
-
-    def select(val)
-      ::Gtk.queue do
-        if val.is_a? Fixnum
-          widget.active = val
-        else
-          idx = @choices.index(val)
-          if !idx.nil?
-            widget.active = idx
-          else
-            widget.text = ""
+        # set up cell completion
+        if editable.is_a? ::Gtk::Entry
+          if !sender.completion.nil?
+            sender.completion.attach(editable)
           end
         end
-      end
-    end
 
-    def signal_connect(signal, &block)
-      case signal
-      when "focus-out-event", "activate"
-        __internal_signal_connect(widget.child, signal, &block)
-      else
-        super
-      end
-    end
+        # Set up traversal functionality.  Some of the code
+        # below is based on the example from
+        # http://www.ruby-forum.com/topic/130202#581785
 
-  private
-  end
+        editable.signal_connect("key-press-event") do |widget, event|
+          rc = false
+          nextcol = 0
+          newrow = row
+          if Gdk::Keyval.to_name(event.keyval) == "Tab"
+            if event.state.shift_mask?
+              # FIXME:  this doesn't appear to get this far.
+              # Need to figure out how to ensure it gets to
+              # the editable!
+              nextcol = sender.column_index - 1
+              if nextcol < 0
+                nextcol = table_view.model.column_count - 1
+                newrow = row - 1
+              end
+            else
+              nextcol = sender.column_index + 1
+              if nextcol == table_view.model.column_count
+                newrow = row + 1
+                nextcol = 0
+                while(!table_view.model.column_is_editable?(nextcol) && nextcol < table_view.model.column_count)
+                  nextcol += 1
+                end
+              end
+              newrow = 0 if newrow == table_view.model.row_count
+            end
 
-  class Form < Widget
-    def initialize(border_width = 5)
-      super(::Gtk::Table.new(1, 2))
-      @fields = {}
-      @fields_by_index = []
-      widget.border_width = border_width
-    end
-
-    def <<(field)
-      add(field)
-    end
-
-    # Can add fields either explicitly via instances of the
-    # FormField class, or you can just specify the label to
-    # use.
-
-    def add(field)
-      if field.is_a? String
-        field = FormField.new(field)
-      end
-
-      return self if @fields_by_index.include? field
-
-      @fields_by_index << field
-      @fields[field.label] = field
-      self
-    end
-
-    def remove(field)
-      @fields.delete(field.label)
-      @fields_by_index.delete(field)
-    end
-      
-    def [](key)
-      if key.is_a? Fixnum
-        return @fields_by_index[key]
-      end
-      @fields[key]
-    end
-
-    def size
-      @fields.size
-    end
-
-    def show_all
-      ::Gtk.queue do
-        widget.hide
-        widget.resize(@fields.size, 2)
-
-        @fields_by_index.each_index do |i|
-          field = @fields_by_index[i]
-          field.label_widget.xalign = 1
-          field.label_widget.justify = ::Gtk::Justification::RIGHT
-          widget.attach(field.label_widget, 0, 1, i, i + 1, ::Gtk::AttachOptions::FILL)
-          widget.attach_defaults(field.field_widget, 1, 2, i, i + 1)
+            widget.editing_done
+            widget.hide
+            gtk_treeview.set_cursor(::Gtk::TreePath.new(newrow.to_s),
+                    gtk_treeview.get_column(nextcol), true)
+            rc = true
+          end
+          rc
         end
 
-        widget.show_all
+        editable.grab_focus
+      end
+
+      self.signal_connect("editing-canceled") do |sender|
+        sender.editing_path = nil
       end
     end
-
-    def clear
-      @fields_by_index.each { |f| f.text = "" }
-    end
-
-    def sensitive=(val)
-      @fields_by_index.each { |f| f.sensitive = val }
-    end 
-      
-    alias rows size
   end
 
 end

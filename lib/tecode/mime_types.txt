@@ -145,7 +145,7 @@ application/simple-filter+xml
 application/simple-message-summary
 application/ simpleSymbolContainer
 application/slate
-application/smil (OBSOLETE)
+application/smil
 application/smil+xml
 application/soap+fastinfoset
 application/soap+xml
@@ -645,7 +645,7 @@ application/xcap-el+xml
 application/xcap-error+xml
 application/xcap-ns+xml
 application/xenc+xml
-application/xhtml-voice+xml (Obsolete)
+application/xhtml-voice+xml
 application/xhtml+xml
 application/xml
 application/xml-dtd
@@ -786,7 +786,6 @@ image/tiff
 image/tiff-fx
 image/vnd.adobe.photoshop
 image/vnd.cns.inf2
-image/vnd.cns.inf2 
 image/vnd.djvu
 image/vnd.dwg
 image/vnd.dxf

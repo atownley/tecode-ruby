@@ -93,7 +93,8 @@ module UI
     end
   end
     
-  # This class provides a general table model implementation.
+  # This class provides a general table model implementation
+  # roughly based on Java's TableModel interface.
   # It is particularly useful for GTK+ since at the moment, it
   # isn't really easy to create custom table models.
   #
@@ -109,11 +110,39 @@ module UI
 
     def initialize
       @editable = false
+      @type_conversion = true
       @rows = []
     end
 
     def editable?
       @editable
+    end
+
+    def enable_type_conversion=(val)
+      @type_conversion = val
+    end
+
+    def do_type_conversion?
+      @type_conversion
+    end
+
+    # This method should be sensibly implemented in derived
+    # classes
+
+    def is_column_editable?(col)
+      editable?
+    end
+    alias column_is_editable? is_column_editable?
+
+    # This method should be sensibly implemented in derived
+    # classes.
+
+    def column_name(index)
+      "Column #{index}"
+    end
+
+    def column_class(index)
+      String
     end
 
     # This method associates the row factory with the table
@@ -184,8 +213,9 @@ module UI
     def []=(index, val)
       check_editable(index)
 
-      @rows[index] = val
-      fire_row_updated(index, val)
+      @rows[index] = RowHolder.new(val, editable)
+      @rows[index].row_edited = true
+      fire_row_changed(index, val)
     end
 
     def row_count
@@ -201,6 +231,7 @@ module UI
   private
     class RowHolder
       def initialize(row, editable)
+        @dirty = false
         @row = row
         @editable = editable
       end
@@ -213,8 +244,23 @@ module UI
         @editable = val
       end
 
+      def dirty?
+        obj_dirty?
+      end
+
+      def row_edited=(val)
+        @dirty = val
+      end
+
       def method_missing(method, *args, &block)
         @row.send(method, *args, &block)
+      end
+
+      def obj_dirty?
+        if @row.respond_to? :dirty?
+          return @row.dirty?
+        end
+        @dirty
       end
     end
   end
@@ -233,6 +279,13 @@ module UI
 
     def column_count
       @columns
+    end
+
+    def column_class(index)
+      if row_count > 0
+        value_for(0, index).class
+      end
+      String
     end
 
     def create_row(factory) 
@@ -256,7 +309,13 @@ module UI
 
     def set_value_for(row, col, value)
       check_index_bounds(row, col)
+      old = self[row][col]
+      return if old == value
+      if !value.is_a?(old.class) && do_type_conversion?
+        value = TECode::Text.convert(old.class, value)
+      end
       self[row][col] = value
+      self[row].row_edited = true if old != value
       fire_row_changed(row, self[row])
     end
 
@@ -296,6 +355,17 @@ module UI
       @column_attrs.size
     end
 
+    def column_name(index)
+      @column_attrs[index].to_s.capitalize.gsub(/_/, " ")
+    end
+
+    def column_class(index)
+      if row_count > 0
+        return value_for(0, index).class
+      end
+      String
+    end
+
     def append_row(row, editable = nil)
       check_row_type(row)
       super(ArrayObjectAdapter.new(row, @column_attrs), editable)
@@ -308,13 +378,19 @@ module UI
 
     def value_for(row, col)
       check_index_bounds(row, col)
-      return nil if !self[row].respond_to? @column_attrs[col]
-      self[row].send @column_attrs[col]
+#      return nil if !self[row].respond_to? @column_attrs[col]
+      self[row].send(@column_attrs[col])
     end
 
     def set_value_for(row, col, value)
       check_index_bounds(row, col)
+      old = self[row][col]
+      return if old == value
+      if !value.is_a?(old.class) && do_type_conversion?
+        value = TECode::Text.convert(old.class, value)
+      end
       self[row][col] = value
+      self[row].row_edited = true if old != value
       fire_row_changed(row, self[row])
     end
 
@@ -375,7 +451,14 @@ module UI
     def column_count
       2
     end
-  
+
+    def column_name(index)
+      if index == 0
+        return "Key"
+      end
+      "Value"
+    end
+
     def insert_row(index, row, editable = nil)
       super(index, row, editable)
       @keys << ""
@@ -397,15 +480,30 @@ module UI
 
     def set_value_for(row, col, value)
       check_index_bounds(row, col)
+
+      puts "row: #{row}; col: #{col}; value: #{value.class}:#{value}"
       key = @keys[row]
+      old = nil
       if col == 0
         oldkey = @keys[row]
+        return if oldkey == value
+        if !value.is_a?(oldkey.class) && do_type_conversion?
+          value = TECode::Text.convert(oldkey.class, value)
+        end
         @keys[row] = value
         @hash[value] = @hash[oldkey]
         @hash.delete(oldkey)
+        old = oldkey
       else
+        old = @hash[key]
+        return if old == value
+        if !value.is_a?(old.class) && do_type_conversion?
+          value = TECode::Text.convert(old.class, value)
+        end
         @hash[key] = value
       end
+      self[row].row_edited = true if old != value
+      fire_row_changed(row, self[row])
     end
 
     def each_row(&block)

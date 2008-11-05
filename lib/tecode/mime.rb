@@ -30,6 +30,14 @@
 require 'rubygems'
 require 'mime/types'
 
+if __FILE__ != $0
+  # automatically generated from the mime_types.txt file by
+  # this script.  Any updates should be placed in the
+  # mime_types.txt file
+  
+  require 'tecode/mime_types'
+end
+
 module TECode
 
 # This module defines constants for the registered IANA Mime
@@ -37,10 +45,10 @@ module TECode
 # on 2008-11-05
 
 module MimeType
-  # automatically generated from the mime_types.txt file by
-  # this script.  Any updates should be placed in the
-  # mime_types.txt file
-  require 'mime_types'
+  # Add some application-specific ones
+  module Application
+    X_RUBY_OBJECT     = MIME::Types["application/x-ruby-object"]
+  end
 end
 
 end
@@ -60,15 +68,19 @@ if __FILE__ == $0
       puts "module #{@module.capitalize}"
     end
     const = File.basename(type).gsub(/[-.+]/, "_").upcase
+    if const =~ /^\d/
+      const = "_#{const}"
+    end
     puts "    #{const} = MIME::Types[\"#{type}\"]"
   end
 
   puts "# Automatically generated from mime_types.txt on #{Time.tstamp}"
+  puts "module TECode\nmodule MimeType"
 
   loop do
     line = gets or break
     next if (line.strip!.nil? || line == "")
     mime_helper(line)
   end
-  puts "end"
+  puts "end\nend\nend"
 end

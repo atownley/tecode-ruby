@@ -38,7 +38,7 @@ module UI
     def initialize(mime_type, mutable = false)
       @mime_type, @mutable = mime_type, mutable
       @items = []
-      @mime_types = [ "text/plain" ]
+      @mime_types = [ TECode::MimeType::Text::PLAIN ]
     end
 
     def mutable?
@@ -53,7 +53,7 @@ module UI
     end
 
     def <<(item)
-      @items << SelectionItem.new(item, mutable?)
+      @items << SelectionItem.new(pre_add_item(item), mutable?)
     end
 
     def [](index)
@@ -63,7 +63,7 @@ module UI
     def [](index, val)
       raise ArgumentError, "selection is not mutable!" if !mutable?
 
-      @items[index] = SelectionItem.new(val, mutable?)
+      @items[index] = SelectionItem.new(pre_add_item(val), mutable?)
     end
 
     def each(&block)
@@ -90,6 +90,18 @@ module UI
     
     def selection_to_mime_type(mime_type)
       to_s
+    end
+
+    # Derived classes should implement this method to do
+    # special preparation on the items prior to their being
+    # added to the selection.  It saves constant
+    # implementation of the modification methods.
+    #
+    # Implementations MUST return a reference to the item
+    # being added.
+
+    def pre_add_item(item, *args)
+      item
     end
 
   private
@@ -129,6 +141,15 @@ module UI
     def fire_selection_changed(selection)
       observers = (@table_model_observers ||= [])
       observers.each { |o| o.table_row_inserted(self, row, value) }
+    end
+  end
+
+  # This class provides default handling for generic
+  # selections of ruby objects.
+
+  class RubyObjectSelection < Selection
+    def initialize(mutable)
+      super(TECode::MimeType::Application::X_RUBY_OBJECT, mutable)
     end
   end
 

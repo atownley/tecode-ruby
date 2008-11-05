@@ -17,50 +17,48 @@
 # NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# File:     standard_tableview.rb
+# File:     notification.rb
 # Author:   Andrew S. Townley
-# Created:  Wed Nov  5 08:00:32 GMT 2008
+# Created:  Sat Nov  1 14:27:10 GMT 2008
 #
 ######################################################################
 #++
 
 module TECode
 module UI
-module Gtk
 
-  # This class provides a "standard" GtkTreeView configured as
-  # a table (no tree functionality).
+  # This class is used to relay notifications from one sender
+  # to another sender's registered listeners.
 
-  class StandardTableView < Widget
-    include SelectionNotifier
-
-    def initialize(editable = false)
-      super(init_view)
-      self.editable = editable
+  class NotificationRelay
+    def initialize(sender, listeners)
+      @listeners = listeners
+      @sender = sender
     end
 
-    def editable?
-      @editable
-    end
-
-    def editable=(val, sentinal_row = true)
-      @editable = val
-    end
-
-    def selection
-      sel = Selection.new("text/plain", 
-    ### Implement the table change observer interface ###
-    
-    def table_row_inserted(sender, index, object)
-    end
-
-    def table_row_deleted(sender, index, object)
-    end
-
-    def table_row_changed(sender, index, object)
+    def method_missing(method, *args, &block)
+      args[0] = @sender
+      @listeners.each { |l| l.send(method, *args, &block) }
     end
   end
 
-end
+  module ViewChangeNotifier
+    def register_view_change_observer(observer)
+      observers = (@view_change_observers ||= [])
+      observers << observer if !observers.include? observer
+    end
+
+    def unregister_view_change_observer(observer)
+      observers = (@view_change_observers ||= [])
+      observers.delete(observer)
+    end
+
+  protected
+    def fire_view_changed
+      observers = (@view_change_observers ||= [])
+      observers.each { |o| o.view_changed(self) }
+    end
+  end
+
 end
 end

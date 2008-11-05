@@ -17,49 +17,30 @@
 # NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# File:     gtk.rb
+# File:     menu.rb
 # Author:   Andrew S. Townley
-# Created:  Sat Nov  1 21:12:34 GMT 2008
+# Created:  Wed Nov  5 14:53:02 GMT 2008
 #
 ######################################################################
 #++
 
-require 'gtk2'
-require 'monitor'
+module TECode
+module UI
 
-# The following is lifted from the Ruby-GNOME2 website to
-# ensure that controls are updated correctly from threaded
-# code.
+  module ContextMenuDelegator
+    attr_accessor :context_menu_delegate
 
-module Gtk
-  GTK_PENDING_BLOCKS = []
-  GTK_PENDING_BLOCKS_LOCK = Monitor.new
+  protected
+    def get_object_context_menu_items(selection)
+      return nil if @context_menu_delegate.nil?
+      @context_menu_delegate.get_object_context_menu_items(self, selection)
+    end
 
-  def Gtk.queue &block
-    if Thread.current == Thread.main
-      block.call
-    else
-      GTK_PENDING_BLOCKS_LOCK.synchronize do
-        GTK_PENDING_BLOCKS << block
-      end
+    def get_non_object_context_menu_items
+      return nil if @context_menu_delegate.nil?
+      @context_menu_delegate.get_non_object_context_menu_items(self)
     end
   end
 
-  def Gtk.main_with_queue timeout
-    Gtk.timeout_add timeout do
-      GTK_PENDING_BLOCKS_LOCK.synchronize do
-        for block in GTK_PENDING_BLOCKS
-          block.call
-        end
-        GTK_PENDING_BLOCKS.clear
-      end
-      true
-    end
-    Gtk.main
-  end
 end
-
-require 'tecode/ui/gtk/cell_renderer'
-require 'tecode/ui/gtk/form'
-require 'tecode/ui/gtk/table_view'
-require 'tecode/ui/gtk/widget'
+end

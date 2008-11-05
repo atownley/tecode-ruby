@@ -1,4 +1,6 @@
-# Automatically generated from mime_types.txt on 2008-11-05T10:28:22.791
+# Automatically generated from mime_types.txt on 2008-11-05T17:11:36.195
+module TECode
+module MimeType
 module Application
     ACTIVEMESSAGE = MIME::Types["application/activemessage"]
     ANDREW_INSET = MIME::Types["application/andrew-inset"]
@@ -147,7 +149,7 @@ module Application
     SIMPLE_MESSAGE_SUMMARY = MIME::Types["application/simple-message-summary"]
      SIMPLESYMBOLCONTAINER = MIME::Types["application/ simpleSymbolContainer"]
     SLATE = MIME::Types["application/slate"]
-    SMIL (OBSOLETE) = MIME::Types["application/smil (OBSOLETE)"]
+    SMIL = MIME::Types["application/smil"]
     SMIL_XML = MIME::Types["application/smil+xml"]
     SOAP_FASTINFOSET = MIME::Types["application/soap+fastinfoset"]
     SOAP_XML = MIME::Types["application/soap+xml"]
@@ -647,7 +649,7 @@ module Application
     XCAP_ERROR_XML = MIME::Types["application/xcap-error+xml"]
     XCAP_NS_XML = MIME::Types["application/xcap-ns+xml"]
     XENC_XML = MIME::Types["application/xenc+xml"]
-    XHTML_VOICE_XML (OBSOLETE) = MIME::Types["application/xhtml-voice+xml (Obsolete)"]
+    XHTML_VOICE_XML = MIME::Types["application/xhtml-voice+xml"]
     XHTML_XML = MIME::Types["application/xhtml+xml"]
     XML = MIME::Types["application/xml"]
     XML_DTD = MIME::Types["application/xml-dtd"]
@@ -659,9 +661,9 @@ module Application
 end
 
 module Audio
-    32KADPCM = MIME::Types["audio/32kadpcm"]
-    3GPP = MIME::Types["audio/3gpp"]
-    3GPP2 = MIME::Types["audio/3gpp2"]
+    _32KADPCM = MIME::Types["audio/32kadpcm"]
+    _3GPP = MIME::Types["audio/3gpp"]
+    _3GPP2 = MIME::Types["audio/3gpp2"]
     AC3 = MIME::Types["audio/ac3"]
     AMR = MIME::Types["audio/AMR"]
     AMR_WB = MIME::Types["audio/AMR-WB"]
@@ -792,7 +794,6 @@ module Image
     TIFF_FX = MIME::Types["image/tiff-fx"]
     VND_ADOBE_PHOTOSHOP = MIME::Types["image/vnd.adobe.photoshop"]
     VND_CNS_INF2 = MIME::Types["image/vnd.cns.inf2"]
-    VND_CNS_INF2  = MIME::Types["image/vnd.cns.inf2 "]
     VND_DJVU = MIME::Types["image/vnd.djvu"]
     VND_DWG = MIME::Types["image/vnd.dwg"]
     VND_DXF = MIME::Types["image/vnd.dxf"]
@@ -922,9 +923,9 @@ module Text
 end
 
 module Video
-    3GPP = MIME::Types["video/3gpp"]
-    3GPP2 = MIME::Types["video/3gpp2"]
-    3GPP_TT = MIME::Types["video/3gpp-tt"]
+    _3GPP = MIME::Types["video/3gpp"]
+    _3GPP2 = MIME::Types["video/3gpp2"]
+    _3GPP_TT = MIME::Types["video/3gpp-tt"]
     BMPEG = MIME::Types["video/BMPEG"]
     BT656 = MIME::Types["video/BT656"]
     CELB = MIME::Types["video/CelB"]
@@ -979,4 +980,6 @@ module Video
     VND_SEALED_SWF = MIME::Types["video/vnd.sealed.swf"]
     VND_SEALEDMEDIA_SOFTSEAL_MOV = MIME::Types["video/vnd.sealedmedia.softseal.mov"]
     VND_VIVO = MIME::Types["video/vnd.vivo"]
+end
+end
 end

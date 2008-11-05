@@ -5,12 +5,12 @@ application/atom+xml
 application/atomicmail
 application/atomcat+xml
 application/atomsvc+xml
-application/auth-policy+xml[RFC4745]
+application/auth-policy+xml
 application/batch-SMTP
 application/beep+xml
 application/cals-1840
 application/ccxml+xml
-application/cellml+xml[RFC4708]
+application/cellml+xml
 application/cnrp+xml
 application/commonground
 application/conference-info+xml
@@ -18,7 +18,7 @@ application/cpl+xml
 application/csta+xml
 application/CSTAdata+xml
 application/cybercash
-application/davmount+xml[RFC4709]
+application/davmount+xml
 application/dca-rft
 application/dec-dx
 application/dialog-info+xml
@@ -31,7 +31,7 @@ application/EDIFACT
 application/EDI-X12
 application/epp+xml
 application/eshop
-application/example[RFC4735]
+application/example
 application/fastinfoset
 application/fastsoap
 application/fits
@@ -89,7 +89,7 @@ application/ocsp-request
 application/ocsp-response
 application/octet-stream
 application/oda
-application/oebps-package+xml[RFC4839]
+application/oebps-package+xml
 application/ogg
 application/parityfec
 application/patch-ops-error+xml

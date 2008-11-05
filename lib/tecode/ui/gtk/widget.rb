@@ -1,9 +1,8 @@
 #--
 ######################################################################
 #
-# Copyright (c) 2008, Andrew S. Townley
-# All rights reserved.
-# 
+# Copyright 2008, Andrew S. Townley
+#
 # Permission to use, copy, modify, and disribute this software for
 # any purpose with or without fee is hereby granted, provided that
 # the above copyright notices and this permission notice appear in
@@ -18,21 +17,25 @@
 # NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# File:        tecode.rb
-# Author:      Andrew S. Townley
-# Created:     Sat Nov  1 08:58:55 GMT 2008
+# File:     widget.rb
+# Author:   Andrew S. Townley
+# Created:  Sat Nov  1 14:27:10 GMT 2008
 #
 ######################################################################
 #++
 
-require 'rubygems'
+module TECode
+module UI
+module Gtk
 
-require 'tecode/time'
-require 'tecode/trace'
-require 'tecode/io/ini'
-require 'tecode/io/properties'
-require 'tecode/table_model'
-require 'tecode/thread/thread'
-require 'tecode/thread/task'
-require 'tecode/thread/event'
-require 'tecode/ui/console/progress_monitor'
+  class Widget
+    attr_reader :widget
+    
+    def initialize(widget)
+      @widget = widget
+    end
+  end
+
+end
+end
+end

@@ -54,7 +54,7 @@ module Text
   # scenarios.
 
   def Text.convert(klass, val)
-    puts "klass: #{klass} vs. #{val.class}"
+#    puts "klass: #{klass} vs. #{val.class}"
     return val if (val.nil? || val.is_a?(klass) || klass == NilClass) 
 
     if (klass != val.class) && (val.is_a? String)
@@ -64,18 +64,29 @@ module Text
           return dest
         elsif dest.class == TrueClass && klass == FalseClass
           return dest
+        elsif val == "1"
+          return true
+        elsif val == "0"
+          return false
         else
           raise ArgumentError, "unable to convert #{val.class}:#{val} into #{klass}"
         end
       end
-      puts "dest class: #{dest.class}"
+#      puts "dest class: #{dest.class}"
       return dest
     elsif klass == String
       return val.to_s
     end
-    puts "HERE"
+#    puts "HERE"
     nil
   end
-    
+
+  # This function does basic auto-formatting of symbol names
+  # to labels.
+
+  def Text.symbol_to_label(symbol)
+    symbol.to_s.gsub(/[-_.]/, " ").capitalize
+  end
+
 end
 end

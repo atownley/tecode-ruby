@@ -183,7 +183,7 @@ module Gtk
     end
 
     def table_row_changed(sender, index, object)
-      puts "table row changed: #{index}"
+#      puts "table row changed: #{index}"
       path = ::Gtk::TreePath.new(index.to_s)
       iter = @tree.model.get_iter(path)
       display_row(iter, index)
@@ -191,11 +191,9 @@ module Gtk
 
   protected
     def object_context_menu
-      return ::Gtk::Menu.new
     end
 
     def non_object_context_menu
-      return ::Gtk::Menu.new
     end
 
   private
@@ -247,11 +245,13 @@ module Gtk
         # FIXME:  need to figure out where the menu is
         # located so we can determine if we display the object
         # or non-object menu
-        object_context_menu.popup(nil, nil, button, time)
+        menu = object_context_menu
+        menu.popup(nil, nil, button, time) if !menu.nil?
       elsif !event.nil?
         path = @tree.get_path(event.x, event.y)
         if path.nil?
-          non_object_context_menu.popup(nil, nil, button, time)
+          menu = non_object_context_menu
+          menu.popup(nil, nil, button, time) if !menu.nil?
           return
         else
           sel_iter = @tree.model.get_iter(path[0])
@@ -259,7 +259,8 @@ module Gtk
             @tree.selection.unselect_all
             @tree.selection.select_iter(sel_iter)
           end
-          object_context_menu.popup(nil, nil, button, time)
+          menu = object_context_menu
+          menu.popup(nil, nil, button, time) if !menu.nil?
         end
       end
     end
@@ -268,7 +269,7 @@ module Gtk
       added_text = false
       iter = model.append
       0.upto(@model.column_count - 1) do |i|
-        if @model.column_is_editable? i
+        if @model.is_column_editable? i
           iter[i] = settings[SENTINAL_TEXT]
           added_text = true
           break
@@ -316,7 +317,6 @@ module Gtk
         if renderer.nil?
           renderer = CompletionCellRendererText.new(i, self, @tree)
         end
-        renderer.background = settings[DIRTY_ROW_COLOR]
         if !@completion_models[i].nil? && renderer.completion.nil?
           renderer.completion = @completion_models[i]
         elsif !@completion_models[i].nil?
@@ -327,7 +327,9 @@ module Gtk
         end
 
         attrs = { :text => i }
+        puts "column #{i} editable? #{@model.is_column_editable?(i)}"
         if @model.is_column_editable? i
+          renderer.background = settings[DIRTY_ROW_COLOR]
           attrs[:background_set] = @model.column_count
         end
         tc = ::Gtk::TreeViewColumn.new(@model.column_name(i), renderer, attrs)

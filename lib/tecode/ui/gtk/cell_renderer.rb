@@ -47,10 +47,8 @@ module Gtk
       super
 
       if !val
-        super.background_gdk = ENTRY.style.bg(Gtk::StateType::INSENSITIVE)
+        super.background_gdk = ENTRY.style.bg(::Gtk::StateType::INSENSITIVE)
         super.background_set = true
-      else
-        super.background_set = false
       end
     end
   end
@@ -68,7 +66,7 @@ module Gtk
      
       # take care of the signal handlers
       self.signal_connect("editing-started") do |sender, editable, path|
-        next if !table_view.model.editable? || !table_view.model.column_is_editable?(col_index) || !editable?
+        next if !table_view.model.editable? || !table_view.model.is_column_editable?(col_index) || !editable?
 
         sender.editing_path = path
         path = ::Gtk::TreePath.new(path)
@@ -113,7 +111,7 @@ module Gtk
               if nextcol == table_view.model.column_count
                 newrow = row + 1
                 nextcol = 0
-                while(!table_view.model.column_is_editable?(nextcol) && nextcol < table_view.model.column_count)
+                while(!table_view.model.is_column_editable?(nextcol) && nextcol < table_view.model.column_count)
                   nextcol += 1
                 end
               end

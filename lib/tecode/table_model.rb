@@ -132,7 +132,6 @@ module UI
     def is_column_editable?(col)
       editable?
     end
-    alias column_is_editable? is_column_editable?
 
     # This method should be sensibly implemented in derived
     # classes.
@@ -226,6 +225,21 @@ module UI
 
     def each_row(&block)
       @rows.each(&block)
+    end
+  
+  protected
+    class ArrayRowAdapter
+      def initialize(array)
+        @row = array
+      end
+
+      def each(&block)
+        @row.each(&block)
+      end
+     
+      def [](index)
+        @row[index]
+      end
     end
 
   private
@@ -356,7 +370,7 @@ module UI
     end
 
     def column_name(index)
-      @column_attrs[index].to_s.capitalize.gsub(/_/, " ")
+      TECode::Text.symbol_to_label(@column_attrs[index])
     end
 
     def column_class(index)
@@ -480,8 +494,7 @@ module UI
 
     def set_value_for(row, col, value)
       check_index_bounds(row, col)
-
-      puts "row: #{row}; col: #{col}; value: #{value.class}:#{value}"
+#      puts "row: #{row}; col: #{col}; value: #{value.class}:#{value}"
       key = @keys[row]
       old = nil
       if col == 0
@@ -524,6 +537,77 @@ module UI
      
       def [](index)
         @row[index]
+      end
+    end
+  end
+  
+  # This class provides an alternative Object TableModel that
+  # can be used to represent the properties of a single object
+  # as a table.
+ 
+  class ObjectPropertiesTableModel < BaseRowModel
+    def initialize(object, property_names)
+      super()
+      @object, @property_names = object, property_names
+      @property_names.each do |key|
+        append_row(hash)
+      end
+      @editable = true
+    end
+
+    def column_count
+      2
+    end
+
+    def is_column_editable?(col)
+      return false if col == 0 || !@object.respond_to?("#{@property_names[col]}=".to_sym)
+      true
+    end
+
+    def column_name(index)
+      if index == 0
+        return "Attribute"
+      end
+      "Value"
+    end
+
+    def insert_row(index, row, editable = nil)
+      raise RuntimeError, "operation not supported"
+    end
+
+    def delete_row(index)
+      raise RuntimeError, "operation not supported"
+    end
+
+    def value_for(row, col)
+      check_index_bounds(row, col)
+      key = @property_names[row]
+      if col == 0
+        return TECode::Text.symbol_to_label(key)
+      end
+      @object.send(key)
+    end
+
+    def set_value_for(row, col, value)
+      check_index_bounds(row, col)
+      key = @property_names[row]
+      if col == 0 || !@object.respond_to?("#{key}=".to_sym)
+        raise ArgumentException, "column is not editable"
+      else
+        old = value_for(row, col)
+        return if old == value
+        if !value.is_a?(old.class) && do_type_conversion?
+          value = TECode::Text.convert(old.class, value)
+        end
+        @object.send("#{key}=".to_sym, value)
+      end
+      self[row].row_edited = true if old != value
+      fire_row_changed(row, self[row])
+    end
+
+    def each_row(&block)
+      @property_names.each do |key|
+        block.call ArrayRowAdapter.new([ key, @object.send(key.to_sym) ])
       end
     end
   end

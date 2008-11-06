@@ -1,7 +1,7 @@
 require 'tecode'
 require 'tecode/ui/gtk'
 
-include TECode::UI
+include TECode
 
 def dump_model(model)
   model.each_row do |row|
@@ -14,7 +14,7 @@ def dump_model(model)
   end
 end
 
-model = TECode::UI::ArrayTableModel.new(3)
+model = ArrayTableModel.new(3)
 model.enable_type_conversion = false
 model.append_row [ 1, 2, 3 ]
 model.append_row %w( one two three )

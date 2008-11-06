@@ -1,7 +1,7 @@
 require 'tecode'
 require 'tecode/ui/gtk'
 
-include TECode::UI
+include TECode
 
 def dump_model(model)
   model.each_row do |row|
@@ -25,6 +25,7 @@ model = ObjectPropertiesTableModel.new(Person.new("bart", 8, "male", false), [:n
 dump_model(model)
 
 table = TECode::UI::Gtk::TableView.new
+table.settings[TECode::UI::Gtk::TableView::SHOW_SENTINAL_ROW] = false
 widget = table.widget
 table.model = model
 

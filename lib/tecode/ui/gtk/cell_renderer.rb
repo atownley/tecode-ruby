@@ -86,6 +86,11 @@ module Gtk
           if !sender.completion.nil?
             sender.completion.attach(editable)
           end
+          # need to force a re-read of the underlying model
+          # since this may be a sentinal row with invalid text
+          val = TECode::Text.convert(String, 
+                  table_view.model.value_for(row, sender.column_index)).to_s
+          editable.text = val if editable.text != val
         end
 
         # Set up traversal functionality.  Some of the code
@@ -115,7 +120,10 @@ module Gtk
                   nextcol += 1
                 end
               end
-              newrow = 0 if newrow == table_view.model.row_count
+              if newrow == table_view.model.row_count \
+                  && !table_view.settings[TableView::SHOW_SENTINAL_ROW]
+                newrow = 0
+              end
             end
 
             widget.editing_done

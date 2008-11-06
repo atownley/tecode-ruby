@@ -1,7 +1,7 @@
 require 'tecode'
 require 'tecode/ui/gtk'
 
-include TECode::UI
+include TECode
 
 def dump_model(model)
   model.each_row do |row|

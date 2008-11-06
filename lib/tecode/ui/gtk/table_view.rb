@@ -84,14 +84,14 @@ module Gtk
       @renderers = {}
       @completion_models = {}
       
-      defe = (editable.nil? ? false : editable)
-      ensure_default(config, EDITABLE, defe)
+      ensure_default(config, EDITABLE, editable)
       ensure_default(config, SHOW_SENTINAL_ROW, true)
       ensure_default(config, SHOW_DIRTY_ROWS, true)
       ensure_default(config, DIRTY_ROW_COLOR, DEFAULT_DIRTY_COLOR)
       ensure_default(config, RULE_HINTING, true)
       ensure_default(config, DRAW_GRID, false)
       ensure_default(config, AUTOMATIC_TYPE_CONVERSION, true)
+      ensure_default(config, SENTINAL_TEXT, DEFAULT_SENTINAL_TEXT)
       self.settings = config
 
       @widget = init_view
@@ -116,6 +116,9 @@ module Gtk
       @model.unregister_table_model_observer(self) if !@model.nil?
       @model = new_model
       @model.register_table_model_observer(self)
+      if settings[EDITABLE].nil?
+        settings[EDITABLE] = @model.editable?
+      end
       reset_table
       fire_view_changed
     end
@@ -138,7 +141,13 @@ module Gtk
     end
 
     def editable=(val)
-      settings[EDITBLE] = val
+      settings[EDITABLE] = val
+      @tree.columns.each_index do |i|
+        val = false if !@model.column_is_editable?(i)
+        @tree.columns[i].cell_renderers.each do |renderer|
+          renderer.editable = val
+        end
+      end
     end
 
     def settings
@@ -169,7 +178,7 @@ module Gtk
     ### Implement the table change observer interface ###
     
     def table_row_inserted(sender, index, object)
-      if (index == row_count - 1) && settings[SHOW_SENTINAL_ROW]
+      if (index == sender.row_count - 1) && settings[SHOW_SENTINAL_ROW]
         iter = @tree.model.get_iter(::Gtk::TreePath.new(index.to_s))
         display_row(iter, index)
         add_sentinal(@tree.model)
@@ -205,6 +214,18 @@ module Gtk
         hash[key] = val
       end
       hash
+    end
+
+    def dirty_col
+      @model.column_count
+    end
+
+    def editable_col
+      @model.column_count + 1
+    end
+    
+    def editable_row_col
+      @model.column_count + 2
     end
 
     def init_view
@@ -275,6 +296,9 @@ module Gtk
           break
         end
       end
+      iter[dirty_col] = false
+      iter[editable_col] = true
+      iter[editable_row_col] = true
       
       if !added_text
         raise RuntimeError, "internal error:  unable to append sentinal text to row because no columns are editable!"
@@ -290,7 +314,9 @@ module Gtk
         end
         iter[col] = val
       end
-      iter[@model.column_count] = @model[row_index].dirty?
+      iter[dirty_col] = @model[row_index].dirty?
+      iter[editable_col] = editable? && @model[row_index].editable?
+      iter[editable_row_col] = @model[row_index].editable?
     end
 
     def reset_table
@@ -305,7 +331,12 @@ module Gtk
       cols = @model.column_count
       args = []
       0.upto(cols - 1) { |i| args << @model.column_class(i) }
-      args << TrueClass
+      # Add some renderer bookkeeping columns:
+      # 1. row dirty?
+      # 2. row editable
+      # 3. disabled background set
+      # 4. disabled background color
+      args << TrueClass << TrueClass << TrueClass << Gdk::Color
       @tree.model = ::Gtk::ListStore.new(*args)
 
       0.upto(@model.row_count - 1) do |row|
@@ -330,13 +361,20 @@ module Gtk
         puts "column #{i} editable? #{@model.is_column_editable?(i)}"
         if @model.is_column_editable? i
           renderer.background = settings[DIRTY_ROW_COLOR]
-          attrs[:background_set] = @model.column_count
+          attrs[:background_set] = dirty_col
         end
+        attrs[:editable] = editable_col
+        
         tc = ::Gtk::TreeViewColumn.new(@model.column_name(i), renderer, attrs)
         tc.set_sort_column_id(i)
         tc.reorderable = true
         tc.resizable = true
         @tree.append_column(tc)
+      end
+
+      puts "table editable? #{editable?}; show sentinal? #{settings[SHOW_SENTINAL_ROW]}"
+      if editable? && settings[SHOW_SENTINAL_ROW]
+        add_sentinal(@tree.model)
       end
     end
 

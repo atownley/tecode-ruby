@@ -25,7 +25,6 @@
 #++
 
 module TECode
-module UI
   
   # This is a mix-in that manages table modle notifications
   #
@@ -190,19 +189,11 @@ module UI
     alias << append_row
 
     def insert_row(index, row, editable = nil)
-      check_editable(index)
-
-      editable = editable? if editable.nil?
-      @rows.insert(index, RowHolder.new(row, editable))
-      fire_row_inserted(index, row)
+      base_insert_row(index, row, editable)
     end
 
     def delete_row(index)
-      check_editable(index)
-
-      row = @rows.delete_at(index)
-      fire_row_deleted(index, row)
-      row
+      base_delete_row(index)
     end
 
     def [](index)
@@ -226,20 +217,26 @@ module UI
     def each_row(&block)
       @rows.each(&block)
     end
-  
+ 
   protected
-    class ArrayRowAdapter
-      def initialize(array)
-        @row = array
-      end
+    # This is defined here so that arbitrary derived classes
+    # can easily do the right thing if their parent class
+    # doesn't allow inserting new rows.
+    
+    def base_insert_row(index, row, editable)
+      check_editable(index)
 
-      def each(&block)
-        @row.each(&block)
-      end
-     
-      def [](index)
-        @row[index]
-      end
+      editable = editable? if editable.nil?
+      @rows.insert(index, RowHolder.new(row, editable))
+      fire_row_inserted(index, row)
+    end
+
+    def base_delete_row(index)
+      check_editable(index)
+
+      row = @rows.delete_at(index)
+      fire_row_deleted(index, row)
+      row
     end
 
   private
@@ -382,18 +379,18 @@ module UI
 
     def append_row(row, editable = nil)
       check_row_type(row)
-      super(ArrayObjectAdapter.new(row, @column_attrs), editable)
+      super(ObjectAttributeColumnAdapter.new(row, @column_attrs), editable)
     end
 
     def insert_row(index, row, editable = nil)
       check_row_type(row)
-      super(ArrayObjectAdapter.new(row, @column_attrs), editable)
+      super(ObjectAttributeColumnAdapter.new(row, @column_attrs), editable)
     end
 
     def value_for(row, col)
       check_index_bounds(row, col)
 #      return nil if !self[row].respond_to? @column_attrs[col]
-      self[row].send(@column_attrs[col])
+      self[row][col]
     end
 
     def set_value_for(row, col, value)
@@ -412,32 +409,6 @@ module UI
     def check_row_type(row)
       if !row.is_a? @row_class
         raise ArgumentError, "specified row #{row} is not compatible with the model's row class: #{@row_class}"
-      end
-    end
-
-  private
-    class ArrayObjectAdapter
-      def initialize(obj, cols)
-        @obj = obj
-        @cols = cols
-      end
-
-      def each(&block)
-        @cols.each do |sym|
-          block.call(@obj.send(sym))
-        end
-      end
-
-      def [](index)
-        @obj.send(@cols[index])
-      end
-
-      def []=(index, val)
-        @obj.send("#{@cols[index]}=".to_sym, val)
-      end
-
-      def method_missing(method, *args, &block)
-        @obj.send(method, *args, &block)
       end
     end
   end
@@ -546,13 +517,13 @@ module UI
   # as a table.
  
   class ObjectPropertiesTableModel < BaseRowModel
+    attr_accessor :property_names, :object
+
     def initialize(object, property_names)
       super()
       @object, @property_names = object, property_names
-      @property_names.each do |key|
-        append_row(hash)
-      end
       @editable = true
+      load_rows(object)
     end
 
     def column_count
@@ -581,35 +552,127 @@ module UI
 
     def value_for(row, col)
       check_index_bounds(row, col)
-      key = @property_names[row]
+      val = self[row][col]
       if col == 0
-        return TECode::Text.symbol_to_label(key)
+        return TECode::Text.symbol_to_label(val)
       end
-      @object.send(key)
+      val
     end
 
     def set_value_for(row, col, value)
       check_index_bounds(row, col)
-      key = @property_names[row]
-      if col == 0 || !@object.respond_to?("#{key}=".to_sym)
-        raise ArgumentException, "column is not editable"
-      else
-        old = value_for(row, col)
-        return if old == value
-        if !value.is_a?(old.class) && do_type_conversion?
-          value = TECode::Text.convert(old.class, value)
-        end
-        @object.send("#{key}=".to_sym, value)
+      old = value_for(row, col)
+      return if old == value
+      if !value.is_a?(old.class) && do_type_conversion?
+        value = TECode::Text.convert(old.class, value)
       end
+      self[row][col] = value
       self[row].row_edited = true if old != value
       fire_row_changed(row, self[row])
     end
 
-    def each_row(&block)
+  protected
+    def load_rows(object)
       @property_names.each do |key|
-        block.call ArrayRowAdapter.new([ key, @object.send(key.to_sym) ])
+        append_row(ObjectAttributeRowAdapter.new(object, key))
       end
     end
   end
-end
+
+  # This class is used to provide a column-centric view of an
+  # object's attributes for easy use with the TableModel
+  # interface.
+
+  class ObjectAttributeColumnAdapter
+    attr_reader :object, :attributes, :format_fn
+
+    def initialize(object, attributes, &formatting_block)
+      @object, @attributes, @format_fn = object, attributes, formatting_block
+
+      # make sure we're dealing with symbols
+      @attributes.each_index do |i|
+        if !@attributes[i].is_a? Symbol
+          @attributes[i].to_s.to_sym
+        end
+      end
+    end
+
+    def each(&block)
+      @attributes.each_index do |i|
+        block.call(self[i])
+      end
+    end
+
+    def [](index)
+      if format_fn.nil?
+        return @object.send(@attributes[index])
+      end
+      format_fn.call(index, @attributes[index], object)
+    end
+
+    def []=(index, val)
+      sym = "#{@attributes[index]}=".to_sym
+      if !@object.respond_to? sym
+        raise RuntimeError, "column #{index} is not editable"
+      end
+      @object.send(sym, val)
+    end
+
+    def method_missing(method, *args, &block)
+      @object.send(method, *args, &block)
+    end
+  end
+
+  # This class is used to provide a row-centric view of an
+  # object's attributes for easy use with the TableModel
+  # interface.
+
+  class ObjectAttributeRowAdapter
+    attr_reader :attribute, :object, :format_fn
+    
+    def initialize(object, attribute, &formatting_block)
+      @object, @attribute, @format_fn = object, attribute.to_s.to_sym, formatting_block
+      @editable = true
+    end
+
+    def editable=(val)
+      @editable = val
+    end
+
+    def editable?
+      @editable
+    end
+
+    def each(&block)
+      [ @attribute, value ].each(&block)
+    end
+
+    def [](index)
+      if index == 0
+        return TECode::Text.symbol_to_label(@attribute)
+      end
+      value
+    end
+
+    def []=(index, val)
+      sym = "#{@attribute}=".to_sym
+      if index == 0 || !@object.respond_to?(sym)
+        raise RuntimeError, "column #{index} is not editable"
+      end
+      @object.send(sym, val)
+    end
+
+    def method_missing(method, *args, &block)
+      @object.send(method, *args, &block)
+    end
+
+  protected
+    def value
+      if format_fn.nil?
+        return @object.send(@attribute)
+      end
+      format_fn.call(@attribute, object)
+    end
+  end
+
 end

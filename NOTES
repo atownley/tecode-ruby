@@ -1,0 +1,12 @@
+Fixes/Changes to be Considered
+==============================
+
+It is questionable that the column display for the table view is
+driven entirely by the table model.  This should be the default
+(probably), but it shouldn't be the th only option.  Otherwise, the
+same model can't feed two different table views viewing different
+columns.
+
+This can probably be handled simply by layering additional
+functionality on top of the existing treeview, but it needs some more
+considered analysis before implementation begins.

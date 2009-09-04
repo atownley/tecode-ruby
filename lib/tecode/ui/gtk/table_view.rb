@@ -29,7 +29,6 @@ module TECode
 module MimeType
   # Define specialized mime types for use within the tecode
   # library
-
   module TECode
     TABLE_ROW               = "application/x-tecode-table-row"
   end
@@ -39,8 +38,30 @@ module UI
 module Gtk
 
   class TreeSelection < TECode::UI::Selection
-    def initialize(mutable)
+    SINGLE        = ::Gtk::SELECTION_SINGLE
+    MULTIPLE      = ::Gtk::SELECTION_MULTIPLE
+
+    def initialize(mutable, model)
       super(TECode::MimeType::TECode::TABLE_ROW, mutable)
+      if !model.nil? && model.respond_to?(:mime_types)
+        @mime_types = @mime_types.concat(model.mime_types).uniq
+      end
+      @model = model
+    end
+
+  protected
+    def selection_to_mime_type(mime_type)
+      rc = []
+
+#      puts "TreeSelection#selection_to_mime_type(#{mime_type})"
+      each do |row|
+        if !@model.nil? && @model.respond_to?(:row_to_mime_type)
+          rc << @model.row_to_mime_type(row.index, mime_type)
+        else
+          rc << super
+        end
+      end
+      rc
     end
   end
 
@@ -49,8 +70,8 @@ module Gtk
   class RowRef
     attr_reader :index, :object
 
-    def initialize(index, object, mutable)
-      @index, @object = index, object
+    def initialize(model, index, object, mutable)
+      @model, @index, @object = model, index, object
       if !mutable
         @object = object.clone.freeze
       end
@@ -59,16 +80,26 @@ module Gtk
     def method_missing(method, *args, &block)
       @object.send(method, *args, &block)
     end
+  
+    def was_changed
+      @model.row_changed(@index)
+    end
+
+    def was_deleted
+      @model.delete_row(@index)
+    end
   end
 
   # This class provides a "standard" GtkTreeView configured as
   # a table (no tree functionality).
 
-  class TableView < Widget
-    include SelectionNotifier
+  class TableView < WidgetHolder
+    include TECode::UI::SelectionNotifier
     include TECode::UI::ViewChangeNotifier
     include TECode::UI::ContextMenuDelegator
-    attr_reader :model
+    include TECode::UI::SignalHandler
+
+    attr_reader   :model
 
     EDITABLE                    = "editable"
     SHOW_SENTINAL_ROW           = "show-sentinal-row"
@@ -77,6 +108,7 @@ module Gtk
     SENTINAL_TEXT               = "sentinal-text"
     RULE_HINTING                = "rule-hinting"
     DRAW_GRID                   = "draw-grid"
+    SELECTION_MODE              = "selection-mode"
     AUTOMATIC_TYPE_CONVERSION   = "automatic-type-conversions"
 
     def initialize(editable = nil, config = {})
@@ -92,8 +124,17 @@ module Gtk
       ensure_default(config, DRAW_GRID, false)
       ensure_default(config, AUTOMATIC_TYPE_CONVERSION, true)
       ensure_default(config, SENTINAL_TEXT, DEFAULT_SENTINAL_TEXT)
+      ensure_default(config, SELECTION_MODE, TreeSelection::MULTIPLE)
       self.settings = config
 
+      @empty_model = TECode::Table::ArrayTableModel.new(0)
+      class << @empty_model
+        def column_name(index)
+          ""
+        end
+      end
+      @empty_model.editable = settings[EDITABLE]
+      @empty_model << [ "" ]
       @widget = init_view
     end
 
@@ -119,8 +160,14 @@ module Gtk
       if settings[EDITABLE].nil?
         settings[EDITABLE] = @model.editable?
       end
+#      puts "model row count = #{new_model.row_count}"
       reset_table
       fire_view_changed
+    end
+
+    def clear
+      self.model.clear if !self.model.nil?
+      @tree.model.clear if !@tree.model.nil?
     end
 
     def editable?
@@ -142,6 +189,7 @@ module Gtk
 
     def editable=(val)
       settings[EDITABLE] = val
+      @empty_model.editable = val
       @tree.columns.each_index do |i|
         val = false if !@model.column_is_editable?(i)
         @tree.columns[i].cell_renderers.each do |renderer|
@@ -159,13 +207,13 @@ module Gtk
     end
 
     def selection
-      sel = TreeSelection.new(false)
+      sel = TreeSelection.new(editable?, @model)
       return sel if @model.nil?
       
       @tree.selection.selected_each do |model, path, iter|
         idx = path.indices[0]
         if idx < @model.row_count
-          sel << RowRef.new(idx, @model[idx], editable?)
+          sel << RowRef.new(@model, idx, @model[idx], editable?)
         else
           if !editable? || !settings[SHOW_SENTINAL_ROW]
             raise RuntimeError, "internal state error:  selected row in the control is '#{idx}', but we only have #{@model.row_count} rows in the model!"
@@ -175,20 +223,116 @@ module Gtk
       sel
     end
 
+    def clear_selection
+      @tree.selection.unselect_all
+    end
+
+    def select_row(row)
+      clear_selection
+      select_rows([row])
+      path = ::Gtk::TreePath.new((row).to_s)
+      ## FIXME:  I've no idea how to do this properly!
+      @tree.scroll_to_cell(path, nil, false, 0, 0) if !@tree.window.nil?
+    end
+
+    def select_rows(rows)
+      rows.each do |row|
+        iter = @tree.model.get_iter(::Gtk::TreePath.new(row.to_s))
+        @tree.selection.select_iter(iter) if !iter.nil?
+      end
+    end
+
+    def select_rows_with_regex(regex, max = nil)
+      rows = model.row_count - 1
+      cols = model.column_count - 1
+      0.upto(rows) do |i|
+        0.upto(cols) do |j|
+          if model[i][j] =~ /#{regex}/i
+            iter = @tree.model.get_iter(::Gtk::TreePath.new(i.to_s))
+            @tree.selection.select_iter(iter)
+            if !max.nil?
+              break if @tree.selection.count_selected_rows == max
+            end
+          end
+        end
+      end
+    end
+
+    def select_rows_with_column_regex(col, regex, max = nil)
+      rows = model.row_count - 1
+      cols = model.column_count - 1
+      
+      if !col.is_a? Fixnum
+        0.upto(cols) do |i|
+          if model.column_name(i) =~ /#{col}/i || \
+              model.column_name(i) =~ /#{TECode::Text.label_to_symbol(col)}/i
+            col = i
+            break
+          end
+        end
+        if !col.is_a? Fixnum
+          raise ArgumentError, "unable to locate column for name '#{col}'"
+        end
+      end
+
+      0.upto(rows) do |i|
+        if model[i][col] =~ /#{regex}/
+          iter = @tree.model.get_iter(::Gtk::TreePath.new(i.to_s))
+          @tree.selection.select_iter(iter)
+          if !max.nil?
+            break if @tree.selection.count_selected_rows == max
+          end
+        end
+      end
+    end
+
     ### Implement the table change observer interface ###
     
     def table_row_inserted(sender, index, object)
-      if (index == sender.row_count - 1) && settings[SHOW_SENTINAL_ROW]
-        iter = @tree.model.get_iter(::Gtk::TreePath.new(index.to_s))
-        display_row(iter, index)
+#      puts "***** Table inserted row[#{index}] = #{object}"
+      path = ::Gtk::TreePath.new((index).to_s)
+      iter = @tree.model.get_iter(path)
+#      puts "***** SENDER.size? #{sender.size}"
+#      puts "***** ITER = #{iter.inspect}"
+      if index == 0 && iter.nil?
+        iter = @tree.model.append
+      else
+#        path = ::Gtk::TreePath.new((index - 1).to_s)
+        if !settings[SHOW_SENTINAL_ROW]
+          @tree.model.insert_after(iter)
+#        else
+#          iter = @tree.model.append
+        end
+      end
+      if iter.nil?
+        # FIXME:  there's gotta be a better way to figure
+        # out what we need to do here...
+        iter = @tree.model.append
+      end
+      display_row(iter, index)
+
+      count = 0
+      @tree.model.each do |x|
+        count += 1
+      end
+#      puts "****** INTERNAL MODEL HAS #{count} ROWS"
+
+      if index == sender.row_count - 1
         add_sentinal(@tree.model)
       end
     end
 
     def table_row_deleted(sender, index, object)
+#      puts "**** DELETE row #{index}"
+#      puts "***** SENDER.size? #{sender.size}"
       path = ::Gtk::TreePath.new(index.to_s)
       iter = @tree.model.get_iter(path)
-      @tree.model.remove(iter)
+      @tree.model.remove(iter) if !iter.nil?
+      
+      # FIXME:  Hackfest begins!
+      if sender.size == 0
+        @tree.model.clear
+      end
     end
 
     def table_row_changed(sender, index, object)
@@ -198,11 +342,8 @@ module Gtk
       display_row(iter, index)
     end
 
-  protected
-    def object_context_menu
-    end
-
-    def non_object_context_menu
+    def show_all
+      self.widget.show_all if !self.widget.nil?
     end
 
   private
@@ -217,14 +358,17 @@ module Gtk
     end
 
     def dirty_col
+#      puts "dirty_col = #{@model.column_count}"
       @model.column_count
     end
 
     def editable_col
+#      puts "editable_col = #{@model.column_count + 1}"
       @model.column_count + 1
     end
     
     def editable_row_col
+#      puts "editable_row_col = #{@model.column_count + 2}"
       @model.column_count + 2
     end
 
@@ -234,9 +378,13 @@ module Gtk
       @tree = ::Gtk::TreeView.new
       @tree.enable_grid_lines = settings[DRAW_GRID] ? ::Gtk::TreeView::GridLines::BOTH : ::Gtk::TreeView::GridLines::NONE
       @tree.rules_hint = settings[RULE_HINTING]
-      @tree.selection.mode = ::Gtk::SELECTION_MULTIPLE
+      @tree.selection.mode = settings[SELECTION_MODE]
       @tree.selection.signal_connect("changed") do |sender|
         fire_selection_changed(selection)
+      end
+      @tree.signal_connect("row-activated") do |sender, path, column|
+        row = path.indices[0]
+        signal_emit("row-activated", self, row, column)
       end
 
       # FIXME:  figure out how to handle context menu items
@@ -261,35 +409,38 @@ module Gtk
     end
 
     def show_context_menu(event, button, time)
-      if event.nil? && button == 0
-        # keyboard initiated
-        # FIXME:  need to figure out where the menu is
-        # located so we can determine if we display the object
-        # or non-object menu
-        menu = object_context_menu
-        menu.popup(nil, nil, button, time) if !menu.nil?
-      elsif !event.nil?
+      path = nil
+      menu = nil
+      if !event.nil?
         path = @tree.get_path(event.x, event.y)
-        if path.nil?
-          menu = non_object_context_menu
-          menu.popup(nil, nil, button, time) if !menu.nil?
-          return
-        else
-          sel_iter = @tree.model.get_iter(path[0])
-          if @tree.selection.selected_rows.size == 0 || !@tree.selection.path_is_selected?(path[0])
-            @tree.selection.unselect_all
-            @tree.selection.select_iter(sel_iter)
-          end
-          menu = object_context_menu
-          menu.popup(nil, nil, button, time) if !menu.nil?
+      end
+      if path.nil?
+        menu = signal_emit("populate-popup", self, menu)
+        if !menu.nil?
+          menu.show_all
+          menu.popup(nil, nil, button, time)
+        end
+        return
+      else
+        sel_iter = @tree.model.get_iter(path[0])
+        if @tree.selection.selected_rows.size == 0 || !@tree.selection.path_is_selected?(path[0])
+          @tree.selection.unselect_all
+          @tree.selection.select_iter(sel_iter)
+        end
+        menu = signal_emit("populate-popup", self, menu, selection)
+        if !menu.nil?
+          menu.popup(nil, nil, button, time)
         end
       end
     end
 
     def add_sentinal(model)
+      return if !settings[SHOW_SENTINAL_ROW] || !editable?
+
       added_text = false
       iter = model.append
       0.upto(@model.column_count - 1) do |i|
+#        puts "checking column '#{@model.column_name(i)}'; editable? #{@model.is_column_editable?(i)}"
         if @model.is_column_editable? i
           iter[i] = settings[SENTINAL_TEXT]
           added_text = true
@@ -301,11 +452,13 @@ module Gtk
       iter[editable_row_col] = true
       
       if !added_text
+#        puts @model
         raise RuntimeError, "internal error:  unable to append sentinal text to row because no columns are editable!"
       end
     end
 
     def display_row(iter, row_index)
+#      puts "display row[#{row_index}]"
       0.upto(@model.column_count - 1) do |col|
         coltype = @tree.model.get_column_type(col)
         val = @model.value_for(row_index, col)
@@ -320,6 +473,7 @@ module Gtk
     end
 
     def reset_table
+      clear_selection
       @tree.model.clear if !@tree.model.nil?
       @tree.columns.reverse_each do |tvc|
         @tree.remove_column(tvc)
@@ -330,7 +484,15 @@ module Gtk
       # this should go away...
       cols = @model.column_count
       args = []
-      0.upto(cols - 1) { |i| args << @model.column_class(i) }
+      0.upto(cols - 1) do |i|
+        # This fun and games is necessary so we don't end up
+        # with default values displayed in the sentinal row.
+        if settings[SHOW_SENTINAL_ROW]
+          args << String
+        else
+          args << @model.column_class(i)
+        end
+      end
       # Add some renderer bookkeeping columns:
       # 1. row dirty?
       # 2. row editable
@@ -358,7 +520,7 @@ module Gtk
         end
 
         attrs = { :text => i }
-        puts "column #{i} editable? #{@model.is_column_editable?(i)}"
+#        puts "column #{i} editable? #{@model.is_column_editable?(i)}"
         if @model.is_column_editable? i
           renderer.background = settings[DIRTY_ROW_COLOR]
           attrs[:background_set] = dirty_col
@@ -372,8 +534,8 @@ module Gtk
         @tree.append_column(tc)
       end
 
-      puts "table editable? #{editable?}; show sentinal? #{settings[SHOW_SENTINAL_ROW]}"
-      if editable? && settings[SHOW_SENTINAL_ROW]
+#      puts "table editable? #{editable?}; show sentinal? #{settings[SHOW_SENTINAL_ROW]}"
+      if editable?
         add_sentinal(@tree.model)
       end
     end

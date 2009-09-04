@@ -68,15 +68,15 @@ module Thread
       @mutex = Mutex.new
       id = 0
       size.times do
-        t = NamedThread.new("ThreadPool:#{@name}-worker:#{id}") { Thread.stop; thread_work };
+        t = NamedThread.new("ThreadPool:#{@name}-worker:#{id}") { ::Thread.stop; thread_work };
         @workers << t
         @group.add(t)
         id += 1
       end
       @monitor = NamedThread.new("#{@name}-monitor") do
-        Thread.stop
+        ::Thread.stop
         loop do
-          Thread.current.terminate if @shutdown
+          ::Thread.current.terminate if @shutdown
           sleep(1)
         end
       end
@@ -114,7 +114,7 @@ module Thread
             @monitor.terminate if @monitor.alive?
             @workers.each { |w| w.terminate if w.alive? }
           rescue Exception => e
-            warn("Ignoring exception:  " << Rubus::format_exception(e))
+            warn("Ignoring exception:  " << TECode::format_exception(e))
           end
         end
       end
@@ -137,15 +137,15 @@ module Thread
     def thread_work
       loop do
         if @shutdown
-          puts "#{Thread.current} stopping";
-          Thread.current.terminate
+          puts "#{::Thread.current} stopping";
+          ::Thread.current.terminate
         end
         job = @work.deq 
         begin
           job.run if job != nil
-          Thread.pass
+          ::Thread.pass
         rescue => e
-          error(Rubus::format_exception(e))
+          error(TECode::format_exception(e))
           next
         end
       end
@@ -202,7 +202,7 @@ module Thread
       data = nil
       
       if(empty?)
-        mt = Thread.current
+        mt = ::Thread.current
 
         # This thread will wait for the timeout.  If it is still
         # alive, it will remove the read thread (rt) from the
@@ -210,21 +210,21 @@ module Thread
 
         rt = nil
         tt = NamedThread.new("timer") do
-          Thread.stop; sleep(timeout); @waiting.delete(rt); mt.wakeup
+          ::Thread.stop; sleep(timeout); @waiting.delete(rt); mt.wakeup
         end
         
         # This thread will actually try and read the data.  If
         # it gets data, it will kill the timer and wake up the
         # main thread.
 
-        rt = Thread.new("read") do
-          Thread.stop; data = deq; __arnold(tt); mt.wakeup
+        rt = ::Thread.new("read") do
+          ::Thread.stop; data = deq; __arnold(tt); mt.wakeup
         end
 
         begin
           tt.run
           rt.run
-          Thread.stop
+          ::Thread.stop
         ensure
           mt.wakeup
           __arnold(tt)
@@ -234,8 +234,8 @@ module Thread
         # just read the data
         begin
           data = deq(true)
-        rescue ThreadError => e
-          puts Rubus.format_exception(e)
+        rescue ::ThreadError => e
+          puts TECode.format_exception(e)
           # don't care
           data = nil
         end

@@ -35,6 +35,9 @@ model.append_row(Person.new("lisa", 6, "female", false))
 
 table = TECode::UI::Gtk::TableView.new
 widget = table.widget
+settings = table.settings
+settings[TECode::UI::Gtk::TableView::SHOW_SENTINAL_ROW] = false
+table.settings = settings
 table.model = model
 
 window = Gtk::Window.new

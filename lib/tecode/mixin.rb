@@ -17,25 +17,37 @@
 # NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# File:     widget.rb
+# File:     mixin.rb
 # Author:   Andrew S. Townley
-# Created:  Sat Nov  1 14:27:10 GMT 2008
+# Created:  Fri Nov  7 16:56:46 GMT 2008
 #
 ######################################################################
 #++
 
 module TECode
-module UI
-module Gtk
 
-  class Widget
-    attr_reader :widget
-    
-    def initialize(widget)
-      @widget = widget
+  module EditableMixin
+    def editable=(val)
+      @editable = val
+    end
+
+    def editable?
+      if @editable.nil?
+        @editable = true
+      end
+      @editable
     end
   end
 
-end
-end
+  module BaseNotifier
+  protected
+    def send_notifications=(val)
+      @send_notifications = val
+    end
+
+    def notify?
+      @send_notifications
+    end
+  end
+
 end

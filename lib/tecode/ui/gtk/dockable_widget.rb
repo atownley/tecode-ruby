@@ -17,51 +17,24 @@
 # NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 # CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# File:     gtk.rb
+# File:     dockable_widget.rb
 # Author:   Andrew S. Townley
-# Created:  Sat Nov  1 21:12:34 GMT 2008
+# Created:  Thu Nov  6 12:53:28 GMT 2008
 #
 ######################################################################
 #++
 
-require 'gtk2'
-require 'monitor'
-
-# The following is lifted from the Ruby-GNOME2 website to
-# ensure that controls are updated correctly from threaded
-# code.
-
+module TECode
+module UI
 module Gtk
-  GTK_PENDING_BLOCKS = []
-  GTK_PENDING_BLOCKS_LOCK = Monitor.new
 
-  def Gtk.queue &block
-    if Thread.current == Thread.main
-      block.call
-    else
-      GTK_PENDING_BLOCKS_LOCK.synchronize do
-        GTK_PENDING_BLOCKS << block
-      end
-    end
+  # This class is currently a placeholder for docking
+  # functionality that needs to be implemented in a consistent
+  # manner across tool windows/palettes and toolbars.
+
+  class DockableWidget < WidgetHolder
   end
 
-  def Gtk.main_with_queue timeout
-    Gtk.timeout_add timeout do
-      GTK_PENDING_BLOCKS_LOCK.synchronize do
-        for block in GTK_PENDING_BLOCKS
-          block.call
-        end
-        GTK_PENDING_BLOCKS.clear
-      end
-      true
-    end
-    Gtk.main
-  end
 end
-
-require 'tecode/ui/gtk/widget_holder'
-require 'tecode/ui/gtk/cell_renderer'
-require 'tecode/ui/gtk/form'
-require 'tecode/ui/gtk/table_view'
-require 'tecode/ui/gtk/dockable_widget'
-require 'tecode/ui/gtk/context_menu'
+end
+end

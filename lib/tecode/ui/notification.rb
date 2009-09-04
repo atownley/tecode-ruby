@@ -27,6 +27,59 @@
 module TECode
 module UI
 
+  # This class allows obsevers to register a single block
+  # rather than implementing public observer methods (which
+  # can get messy and unnecessarily pollute the public API
+  # of the class)
+  #
+  # Each registered block will be called with the following
+  # arguments:
+  #
+  # 1) The notification name (or the method name to be called)
+  # 2) The sender of the notification
+  # 3) The notification parameters.
+
+  class ObserverReference
+    attr_reader :observer
+
+    def initialize(observer, &block)
+      @observer = observer
+      @block = block
+    end
+
+    def method_missing(method, *args, &block)
+      if @observer.respond_to? method
+        @observer.send(method, *args, &block)
+      elsif !@block.nil?
+        @block.call(method, *args)
+      else
+        super
+      end
+    end
+  end
+
+  class ObserverList
+    def initialize
+      @observers = {}
+    end
+
+    def <<(val)
+      if !val.is_a? ObserverReference
+        raise ArgumentError, "can only have observer references in the list!"
+      end
+
+      @observers[val.observer] = val if !@observers.include? val.observer
+    end
+
+    def delete(val)
+      @observers.delete(val)
+    end
+
+    def each(&block)
+      @observers.each_value(&block)
+    end
+  end
+
   # This class is used to relay notifications from one sender
   # to another sender's registered listeners.
 
@@ -43,13 +96,13 @@ module UI
   end
 
   module ViewChangeNotifier
-    def register_view_change_observer(observer)
-      observers = (@view_change_observers ||= [])
-      observers << observer if !observers.include? observer
+    def register_view_change_observer(observer, &block)
+      observers = (@view_change_observers ||= ObserverList.new)
+      observers << ObserverReference.new(observer, &block)
     end
 
     def unregister_view_change_observer(observer)
-      observers = (@view_change_observers ||= [])
+      observers = (@view_change_observers ||= ObserverList.new)
       observers.delete(observer)
     end
 
@@ -60,5 +113,70 @@ module UI
     end
   end
 
+  module ChangeNotifier
+    def register_change_observer(observer, &block)
+      observers = (@change_observers ||= ObserverList.new)
+      observers << ObserverReference.new(observer, &block)
+    end
+
+    def unregister_change_observer(observer)
+      observers = (@change_observers ||= [])
+      observers.delete(observer)
+    end
+
+    def squelch=(val)
+      @notification_squelch = val
+    end
+
+  protected
+    def fire_changed
+      return if @notification_squelch
+      observers = (@change_observers ||= [])
+      observers.each { |o| o.changed(self) }
+    end
+  end
+
+  module PropertyChangeNotifier
+    def register_property_change_observer(observer, &block)
+      observers = (@property_change_observers ||= [])
+      observers << ObserverReference.new(observer, &block)
+    end
+
+    def unregister_property_change_observer(observer)
+      observers = (@property_change_observers ||= [])
+      observers.delete(observer)
+    end
+
+    def squelch=(val)
+      @notification_squelch = val
+    end
+
+  protected
+    def fire_property_changed(property, old_val, new_val)
+      return if @notification_squelch
+      observers = (@property_change_observers ||= [])
+      observers.each { |o| o.property_changed(self, property, old_val, new_val) }
+    end
+  end
+
+  module SignalHandler
+    def signal_connect(signal, &block)
+      signals = (@signals ||= {})
+      signals[signal] = block
+    end
+
+    def signal_disconnect(signal)
+      signals = (@signals ||= {})
+      signals.delete(signal)
+    end
+
+    def signal_emit(signal, *args)
+      signals = (@signals ||= {})
+      if signals.key? signal
+        proc = signals[signal]
+        proc.call(*args) if !proc.nil?
+      end
+    end
+  end   
 end
 end

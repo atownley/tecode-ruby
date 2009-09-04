@@ -98,9 +98,12 @@ module TECode
     # This method is used to wrap the object in an decorator
     # used to gather timing statistics.
 
-    def initialize(obj = nil)
+    def initialize(obj = nil, &block)
       @created = Time.now
       @obj = obj
+      if !block.nil?
+        block.call
+      end
     end
   end
 

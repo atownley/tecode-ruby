@@ -12,7 +12,7 @@ def dump_model(model)
 end
 
 puts "Initialization of array model"
-amodel = TECode::ArrayTableModel.new(3)
+amodel = TECode::Table::ArrayTableModel.new(3)
 amodel.enable_type_conversion = false
 amodel.append_row %w( one two three )
 amodel.append_row [ 1, 2, 3 ]
@@ -30,7 +30,7 @@ dump_model(amodel)
 
 puts "Initialization of hash model"
 hash = { "one" => 1, "two" => 2, "three" => 3 }
-hmodel = TECode::HashTableModel.new(hash)
+hmodel = TECode::Table::HashTableModel.new(hash)
 hmodel.enable_type_conversion = false
 dump_model(hmodel)
 puts hash.inspect
@@ -52,7 +52,7 @@ class Person
 end
 
 puts "Initialization of object model"
-omodel = TECode::ObjectTableModel.new(Person, [:name, :age, :sex])
+omodel = TECode::Table::ObjectTableModel.new(Person, [:name, :age, :sex])
 class <<omodel
   def create_row(sender)
     Person.new(nil, nil, nil)

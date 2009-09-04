@@ -30,14 +30,27 @@ require 'rubygems'
 require 'tecode/time'
 require 'tecode/trace'
 require 'tecode/mime'
+require 'tecode/mixin'
 require 'tecode/io/ini'
 require 'tecode/io/properties'
-require 'tecode/table_model'
+require 'tecode/table/table_model'
+require 'tecode/table/array_table_model'
+require 'tecode/table/hash_table_model'
+require 'tecode/table/object_table_model'
 require 'tecode/text'
 require 'tecode/thread/thread'
 require 'tecode/thread/task'
 require 'tecode/thread/event'
-require 'tecode/ui/selection'
 require 'tecode/ui/notification'
+require 'tecode/ui/selection'
 require 'tecode/ui/menu'
 require 'tecode/ui/console/progress_monitor'
+
+module TECode
+  # Formats the exception (I'm sure there's a way to do
+  # this automatically...)
+
+  def TECode.format_exception(e)
+      "Exception in thread \"#{Thread.current}\" #{e.class}: #{e}\n\tfrom " << e.backtrace.join("\n\tfrom ")
+  end
+end

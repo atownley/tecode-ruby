@@ -71,7 +71,7 @@ if __FILE__ == $0
     if const =~ /^\d/
       const = "_#{const}"
     end
-    puts "    #{const} = MIME::Types[\"#{type}\"]"
+    puts "    #{const} = MIME::Types[\"#{type}\"][0]"
   end
 
   puts "# Automatically generated from mime_types.txt on #{Time.tstamp}"

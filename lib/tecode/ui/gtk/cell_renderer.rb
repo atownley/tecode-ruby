@@ -93,6 +93,11 @@ module Gtk
           editable.text = val if editable.text != val
         end
 
+        editable.signal_connect("focus-out-event") do |widget, event|
+          widget.editing_done
+          false
+        end
+
         # Set up traversal functionality.  Some of the code
         # below is based on the example from
         # http://www.ruby-forum.com/topic/130202#581785
@@ -121,11 +126,12 @@ module Gtk
                 end
               end
               if newrow == table_view.model.row_count \
-                  && !table_view.settings[TableView::SHOW_SENTINAL_ROW]
+                 && !table_view.settings[TableView::SHOW_SENTINAL_ROW]
                 newrow = 0
               end
             end
 
+            puts "new location (#{newrow}, #{nextcol})"
             widget.editing_done
             widget.hide
             gtk_treeview.set_cursor(::Gtk::TreePath.new(newrow.to_s),

@@ -28,21 +28,15 @@ module TECode
 module UI
 module Gtk
 
-  class Widget
-    attr_reader :widget
-    
-    def initialize(widget)
-      @widget = widget
-    end
-  end
+  class FormField < WidgetHolder
+    attr_accessor :widget_class, :field_widget, :label_widget, :field_id
+    attr_reader :label
 
-  class FormField < Widget
-    attr_accessor :label, :widget_class, :field_widget, :label_widget
-
-    def initialize(label, widget = ::Gtk::Entry.new)
+    def initialize(field_id, widget = ::Gtk::Entry.new)
       super(widget)
-      @label = label
-      @label_widget = ::Gtk::Label.new("#{label}:")
+      @field_id = field_id
+      @label = field_id
+      @label_widget = ::Gtk::Label.new("#{field_id.capitalize}:")
       @field_widget = widget
       @dirty = false
       @editable = true
@@ -54,7 +48,7 @@ module Gtk
 
     def editable=(val)
       @editable = val
-      ::Gtk.queue do
+#      ::Gtk.queue do
         if editable?
           field_widget.sensitive = true
           field_widget.editable = true
@@ -62,7 +56,12 @@ module Gtk
           field_widget.sensitive = false
           field_widget.editable = false
         end
-      end
+#      end
+    end
+
+    def label=(val)
+      @label = val
+      @label_widget.text = "#{val}:"
     end
 
     def dirty?
@@ -70,22 +69,26 @@ module Gtk
     end
 
     def text
-      ::Gtk.queue { @widget.text }
+      s = @widget.text
+      s = "" if s.nil?
+      s
     end
 
     def text=(val)
       val = val.to_s
-      ::Gtk.queue do
         if val != @widget.text
           @dirty = true
         end
         @widget.text = val
-      end
     end
 
     def show_all
       @label_widget.show
       @field_widget.show
+    end
+
+    def grab_focus
+      @field_widget.grab_focus
     end
 
     # This is a bit of a hack, but...
@@ -114,32 +117,41 @@ module Gtk
       widget.child.completion.model = widget.model
       widget.child.completion.text_column = 0
       widget.child.completion.inline_completion = true
-
       @choices = []
     end
 
     def text
-      ::Gtk.queue { widget.child.text }
+#      s = ::Gtk.queue { widget.child.text }
+      s = widget.child.text
+      s = "" if s.nil?
+      s
     end
 
     def text=(val)
       val = val.to_s
-      ::Gtk.queue do
+#      ::Gtk.queue do
         if val != widget.child.text
           @dirty = true
           widget.child.text = val
         end
-      end
+#        puts "combo child text: '#{widget.child.text}'"
+#        puts "combo text: '#{text}'"
+#      end
     end
 
     def choices=(choices)
-      @choices = [] if choices.nil?
-      ::Gtk.queue do
-        widget.model.clear
-        choices.each { |c| widget.append_text(c) }
-        widget.child.text = "" if !choices.include? widget.child.text
+      if choices.nil?
+        @choices = []
+      else
         @choices = choices
       end
+
+#      ::Gtk.queue do
+#        puts "#{@choices.join(',')}"
+        widget.model.clear
+        @choices.each { |c| widget.append_text(c) }
+        widget.child.text = "" if !@choices.include? widget.child.text
+#      end
     end
 
     def choices
@@ -151,7 +163,7 @@ module Gtk
     end
 
     def select(val)
-      ::Gtk.queue do
+#      ::Gtk.queue do
         if val.is_a? Fixnum
           widget.active = val
         else
@@ -159,10 +171,10 @@ module Gtk
           if !idx.nil?
             widget.active = idx
           else
-            widget.text = ""
+            widget.child.text = ""
           end
         end
-      end
+#      end
     end
 
     def signal_connect(signal, &block)
@@ -178,12 +190,13 @@ module Gtk
   private
   end
 
-  class Form < Widget
-    def initialize(border_width = 5)
+  class Form < WidgetHolder
+    def initialize(border_width = 3, row_spacing = nil)
       super(::Gtk::Table.new(1, 2))
       @fields = {}
       @fields_by_index = []
       widget.border_width = border_width
+      widget.row_spacings = row_spacing if !row_spacing == nil
     end
 
     def <<(field)
@@ -223,7 +236,7 @@ module Gtk
     end
 
     def show_all
-      ::Gtk.queue do
+#      ::Gtk.queue do
         widget.hide
         widget.resize(@fields.size, 2)
 
@@ -236,7 +249,7 @@ module Gtk
         end
 
         widget.show_all
-      end
+#      end
     end
 
     def clear

@@ -27,7 +27,7 @@
 
 module TECode
 module Text
-  DIGIT     = %r{\d+(?:.?\d+)?}
+  DIGIT     = %r{[-+]?\d+(?:\.?\d+)?}
   QLITERAL  = %r{"(?:[^"\\]|\\.)*"}
   
   # This function should be used whenever user-input strings
@@ -39,10 +39,16 @@ module Text
       when /^[-+]?0\d+$/ then val = val.oct
       when /^[-+]?0x[a-fA-F\d][a-fA-F\d]*$/ then val = val.hex
       when /^[-+]?\d+$/ then val = val.to_i
-      when /^[-+]?#{DIGIT}$/ then val = val.to_f
-      when /^[-+]?#{DIGIT}%$/ then val = val.to_f / 100
-      when /^:(.*)/ then val = $1.gsub(/\s+/, "-").to_sym
-      when /^\\:/ then val = $1.gsub(/\\/, "")
+      when /^#{DIGIT}$/ then val = val.to_f
+      when /^#{DIGIT}%$/ then val = val.to_f / 100
+      when /^:(.*)/
+        val = $1.gsub(/\s+/, "-")
+        if !val.nil? && "" != val
+          val = val.to_sym
+        else
+          val = nil
+        end
+      when /^\\:/ then val = $1.gsub(/^\\:/, "")
       when /^true$/i then val = true
       when /^false$/i then val = false
     end
@@ -88,5 +94,8 @@ module Text
     symbol.to_s.gsub(/[-_.]/, " ").capitalize
   end
 
+  def Text.label_to_symbol(label)
+    label.gsub(/ /, "-").downcase
+  end
 end
 end

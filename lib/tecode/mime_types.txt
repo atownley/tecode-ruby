@@ -880,6 +880,7 @@ text/t140
 text/tab-separated-values
 text/troff
 text/ulpfec
+text/uri-list
 text/vnd.abc
 text/vnd.curl
 text/vnd.DMClientScript

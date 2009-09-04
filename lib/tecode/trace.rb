@@ -89,6 +89,7 @@ module Trace
   end
 
   def will_trace?(threshold)
+    return false if @maturity.nil?
     thresh = (@maturity * 10) + threshold
     if @@level >= thresh
       return true
@@ -124,9 +125,16 @@ module Trace
     return *args
   end
 
-  def trace_throw(method, klass, msg)
-    tputs 1, "method :#{method} throwing exception #{klass} with message: #{msg}"
-    return klass.new(msg)
+  def trace_throw(method, klass, *args)
+    ex = nil
+    if args.length == 0
+      ex = klass
+      klass = ex.class
+    else
+      ex = klass.new(*args)
+    end
+    tputs 1, "method :#{method} throwing exception #{klass} with message: #{ex.message}"
+    return ex
   end
 
   def trace_end(method)

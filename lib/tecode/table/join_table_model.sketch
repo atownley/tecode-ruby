@@ -25,81 +25,50 @@
 #++
 
 module TECode
+module Table
+
+  class JoinTableModel
+    include TableModel
+
+  def initialize
+    @links = []
+    @links_by_join = {}
+  end
+
+  # This method will add a model based on the specified link
+  # attribute
   
-  # This is a mix-in that manages table modle notifications
-  #
-  # TableModels provide notifications to registered
-  # observer objects about table events via the
-  # TableModelObserver informal protocol.  This protocol is
-  # defined as follows:
-  #
-  # TableModelObserver
-  #   +table_row_inserted(sender, row_index, row_value)
-  #   +table_row_deleted(sender, row_index, row_value)
-  #   +table_row_changed(sender, row_index, row_value)
-
-  module TableModelNotifier
-    def register_table_model_observer(observer)
-      observers = (@table_model_observers ||= [])
-      observers << observer if !observers.include? observer
-    end
-
-    def unregister_table_model_observer(observer)
-      observers = (@table_model_observers ||= [])
-      observers.delete(observer)
-    end
-
-  protected
-    def fire_row_inserted(row, value)
-      observers = (@table_model_observers ||= [])
-      observers.each { |o| o.table_row_inserted(self, row, value) }
-    end
-
-    def fire_row_deleted(row, value)
-      observers = (@table_model_observers ||= [])
-      observers.each { |o| o.table_row_deleted(self, row, value) }
-    end
-
-    def fire_row_changed(row, value)
-      observers = (@table_model_observers ||= [])
-      observers.each { |o| o.table_row_changed(self, row, value) }
-    end
+  def add_link(source_model, target_model, 
+                link_attribute, src_attrs, target_attrs)
+    link << ModelLink.new(source_model, target_model,
+                          link_attribute, selected_attributes)
+    @links << link
+    @links_by_join[ [source_model, target_model] ] = link
   end
 
-  # This is a mix-in that allows centralized bounds checking
+  def delete_link(source_model, target_model)
+    link = get_link(source_model, target_model)
+    if link.nil?
+      raise ArgumentException, "no link exists between #{source_mode} and #{target_model}"
+    end
+    @links.delete(link)
+    @links_by_join.delete([ source_model, target_model ])
+  end
+  
+  private
+    class ModelLink
+      attr_reader :source, :target, :link, :selected_attributes
 
-  module TableModelHelper
-    attr_reader :column_count, :row_count
-
-  protected
-    def check_editable(row)
-      if !self.editable? 
-        raise ArgumentError, "model is not editable"
-      end
-      if row < row_count && !self[row].editable?
-        raise ArgumentError, "model is not editable"
+      def initialize(src, target, link_attribute, selected_attributes)
+        @source, @target, @link = src, target, link
+        @selected_attributes = selected_attributes
       end
     end
 
-    def check_index_bounds(row, col)
-      if row >= row_count
-        raise ArgumentError, "requested row #{row} out of bounds.  Model has #{row_count} rows."
-      end
-
-      if col >= column_count
-        raise ArgumentError, "requested column #{col} out of bounds.  Model has #{column_count} columns."
-      end
+    def get_link(src, dest)
+      @links_by_join[ [src, dest] ]
     end
   end
-    
-  # This class provides a general table model implementation
-  # roughly based on Java's TableModel interface.
-  # It is particularly useful for GTK+ since at the moment, it
-  # isn't really easy to create custom table models.
-  #
-  # This class uses a row creation delegate which must respond
-  # to the create_row(model) method and return a new row which
-  # is compatible with the model.
 
   class BaseRowModel
     include TableModelNotifier
@@ -115,6 +84,13 @@ module TECode
 
     def editable?
       @editable
+    end
+
+    def editable=(val)
+      if val && !@row_factory
+        raise ArgumentError, "cannot set model editable without a row factory.  Set one using :row_factory=(factory)"
+      end
+      editable = val
     end
 
     def enable_type_conversion=(val)
@@ -186,7 +162,10 @@ module TECode
       @rows << RowHolder.new(row, editable)
       fire_row_inserted(@rows.size - 1, row)
     end
-    alias << append_row
+
+    def <<(row)
+      append_row(row)
+    end
 
     def insert_row(index, row, editable = nil)
       base_insert_row(index, row, editable)
@@ -217,7 +196,11 @@ module TECode
     def each_row(&block)
       @rows.each(&block)
     end
- 
+
+    def clear
+      @rows.clear
+    end
+
   protected
     # This is defined here so that arbitrary derived classes
     # can easily do the right thing if their parent class
@@ -584,6 +567,8 @@ module TECode
   # interface.
 
   class ObjectAttributeColumnAdapter
+    include EditableMixin
+
     attr_reader :object, :attributes, :format_fn
 
     def initialize(object, attributes, &formatting_block)
@@ -628,19 +613,12 @@ module TECode
   # interface.
 
   class ObjectAttributeRowAdapter
+    include EditableMixin
+    
     attr_reader :attribute, :object, :format_fn
     
     def initialize(object, attribute, &formatting_block)
       @object, @attribute, @format_fn = object, attribute.to_s.to_sym, formatting_block
-      @editable = true
-    end
-
-    def editable=(val)
-      @editable = val
-    end
-
-    def editable?
-      @editable
     end
 
     def each(&block)
@@ -675,4 +653,5 @@ module TECode
     end
   end
 
+end
 end

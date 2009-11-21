@@ -274,10 +274,10 @@ private
       if obj.size > 10
         s << " Hash of size = #{obj.size}; Key preview: [ " << format_arr(obj.keys[0..9]) << ", ... ]
       else
-        s << "#{obj.object_id}"  << " (#{obj.class})"
+        s << "#{obj}"  << " (#{obj.class})"
       end
     else
-      s << "#{obj.object_id}"  << " (#{obj.class})"
+      s << "#{obj}"  << " (#{obj.class})"
     end
     s 
   end

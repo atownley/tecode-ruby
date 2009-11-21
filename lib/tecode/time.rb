@@ -105,6 +105,25 @@ module TECode
         block.call
       end
     end
+
+    # This method resets the time created for the object to
+    # now.
+
+    def reset
+      @created = Time.now
+    end
+
+    def <=>(rhs)
+      if rhs.is_a? TimerDecorator
+#        puts "rhs: #{obj}: #{rhs.inspect}; #{self.created <=> rhs.created}"
+        return self.created <=> rhs.created
+      end
+      super
+    end
+
+    def method_missing(method, *args, &block)
+      @obj.send(method, *args, &block)
+    end
   end
 
   SEC_IN_DAY  = 86400

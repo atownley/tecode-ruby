@@ -27,6 +27,7 @@
 
 require 'rubygems'
 
+require 'tecode/data'
 require 'tecode/time'
 require 'tecode/trace'
 require 'tecode/mime'

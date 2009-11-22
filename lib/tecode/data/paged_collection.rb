@@ -35,61 +35,20 @@ module Data
   # to the [] operator and the size operator can be used as
   # the collection.
 
-  class PagedCollection
-    def initialize(collection, manage_locks = true)
-      @collection = collection
-      @sessions = {}
-      @mutex = Mutex.new
-      @manage_locks = manage_locks
-    end
-
-    def size
-      lock do
-        @collection.size
-      end
-    end
-
-    def collection=(val)
-      lock do
-        @sessions.values.each do |value|
-          value.invalidate!
-        end
-        @collection = val
-      end
-    end
-
-    def [](index)
-      lock do
-        @collection[index]
-      end
-    end
-
+  class PagedCollection < SharedCollection
     def new_session(pagesize = 20)
-      session = PageSession.new(self, pagesize)
-      @mutex.synchronize { @sessions[session] = session }
-      session
-    end
-
-  private
-    def lock(&block)
-      if @manage_locks
-        @mutex.synchronize do
-          return block.call
-        end
-      else
-        return block.call
-      end
+      manage_session(PageSession.new(self, pagesize))
     end
   end
 
   # This class represents a specific session (or cursor)
   # within the given PagedCollection instance
 
-  class PageSession
+  class PageSession < CollectionSession
     attr_reader :page_size, :page
 
     def initialize(pc, page_size)
-      @collection = pc
+      super(pc)
       @index = -1
       @page = 1
       @page_size = page_size
@@ -98,6 +57,7 @@ module Data
     # This method resets the page size for this session.
     
     def page_size=(val)
+      raise InvalidSessionError, "Collection session has been invalidated" if !valid?
       @page_size = val
       if @page <= pages
         go_to(@page)
@@ -106,17 +66,11 @@ module Data
       end
     end
 
-    # This method returns the total size of the collection
-    # (may be approximate, depending on the store)
-
-    def size
-      @collection.size
-    end
-
     # This method will call the specified block for each item
     # in the collection in the "next" page
 
     def each_page_next(&block)
+      raise InvalidSessionError, "Collection session has been invalidated" if !valid?
       return if @page > pages
       go_to(@page += 1)
       each_row(&block)
@@ -126,6 +80,7 @@ module Data
     # in the collection in the "previous" page
 
     def each_page_prev(&block)
+      raise InvalidSessionError, "Collection session has been invalidated" if !valid?
       #puts "Page: #{@page}; index = #{@index}"
       return if @page < 2
       go_to(@page -= 1)
@@ -135,6 +90,7 @@ module Data
     # This method will iterate over the current page
 
     def each(&block)
+      raise InvalidSessionError, "Collection session has been invalidated" if !valid?
       go_to(@page)
       each_row(&block)
     end
@@ -143,22 +99,27 @@ module Data
     # is equivalent to the page method.
     
     def number
+      raise InvalidSessionError, "Collection session has been invalidated" if !valid?
       page
     end
 
     def first
+      raise InvalidSessionError, "Collection session has been invalidated" if !valid?
       @page = 1
     end
 
     def last
+      raise InvalidSessionError, "Collection session has been invalidated" if !valid?
       @page = pages
     end
 
     def page=(val)
+      raise InvalidSessionError, "Collection session has been invalidated" if !valid?
       go_to(val)
     end
 
     def go_to(page)
+      raise InvalidSessionError, "Collection session has been invalidated" if !valid?
       if page < 0
         page = pages + page + 1
       elsif page == 0
@@ -174,6 +135,7 @@ module Data
     # possible given the current page size.
 
     def pages
+      raise InvalidSessionError, "Collection session has been invalidated" if !valid?
       _pages = size / page_size
       if size % page_size > 0
         _pages += 1
@@ -185,9 +147,11 @@ module Data
 
   private
     def each_row(&block)
+      raise InvalidSessionError, "Collection session has been invalidated" if !valid?
       return if @page > pages
 
       1.upto(page_size) do |row|
+        raise InvalidSessionError, "Collection session has been invalidated" if !valid?
         break if @index == @collection.size
         block.call(@index, row, @collection[@index])
         @index += 1

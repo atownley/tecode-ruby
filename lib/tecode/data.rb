@@ -25,4 +25,6 @@
 #++
 
 require 'tecode/data/cache'
+require 'tecode/data/shared_collection'
 require 'tecode/data/paged_collection'
+require 'tecode/data/iterated_collection'

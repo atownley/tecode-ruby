@@ -115,14 +115,18 @@ module Data
         resort
       end
 #      if (@accesses % 100) == 0
-#      if (@accesses % 20) == 0
+      if (@accesses % 20) == 0
         STDERR.puts "Cache '#{@name}' hit rate: #{hit_rate}% over #{accesses} accesses"
-#      end
-      val
+      end
+     val
     end
 
     # This method deletes the specific object from the cache
     # and returns the value.
+    #
+    # NOTE:  This method assumes that the key and the value
+    # are the same.  If not, you need to use the delete_if!
+    # method instead.
 
     def delete(object)
       val = @objects.delete(object)
@@ -130,6 +134,18 @@ module Data
         @index.delete(val)
       end
       val
+    end
+
+    # This method removes a particular value from the cache if
+    # it meets the given criteria
+
+    def delete_if!(&block)
+      @objects = @objects.delete_if do |key, val|
+        if block.call(key, val)
+          @index.delete(val)
+          true
+        end
+      end
     end
 
     # This method returns the values in the cache.

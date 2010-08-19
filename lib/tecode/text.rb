@@ -25,23 +25,29 @@
 ######################################################################
 #++
 
+$KCODE='u'
+require 'jcode'
+
 module TECode
 module Text
   DIGIT     = %r{[-+]?\d+(?:\.?\d+)?}
-  QLITERAL  = %r{"(?:[^"\\]|\\.)*"}
+  HEXDIGIT  = %r{[-+]?0x[a-fA-F\d][a-fA-F\d]*}
+  QLITERAL  = %r{(?:"(?:[^"\\]|\\.)*")|'(?:[^'\\]|\\.)*'}
   
   # This function should be used whenever user-input strings
   # need to be parsed into the corresponding runtime value.
 
-  def Text.parse_string(str)
+  def self.parse_string(str)
+    return str if !str.is_a? String
+
     val = str
     case val 
+      when /^#{HEXDIGIT}$/ then val = val.hex
       when /^[-+]?0\d+$/ then val = val.oct
-      when /^[-+]?0x[a-fA-F\d][a-fA-F\d]*$/ then val = val.hex
       when /^[-+]?\d+$/ then val = val.to_i
       when /^#{DIGIT}$/ then val = val.to_f
       when /^#{DIGIT}%$/ then val = val.to_f / 100
-      when /^:(.*)/
+      when /^:([^\s]*)$/
         val = $1.gsub(/\s+/, "-")
         if !val.nil? && "" != val
           val = val.to_sym
@@ -96,6 +102,54 @@ module Text
 
   def Text.label_to_symbol(label)
     label.gsub(/ /, "-").downcase
+  end
+
+  def Text.utf8_encode(str)
+    s = ""
+    str.each_char do |c|
+      begin
+        x = c.unpack("C")[0]
+        if x < 128
+          s << c
+        else
+          s << "\\u%04x" % c.unpack("U")[0]
+        end
+      rescue => e
+        # FIXME:  this represents a character conversion
+        # error, but we're going to replace it with a '?' like
+        # other implementations.
+        s << "?"
+      end
+    end
+    s
+  end
+
+  def Text.utf8_decode(str)
+    str.gsub(/\\u([0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F])/) do
+      [ $1.hex ].pack("U*")
+    end 
+  end
+
+  # This method is basically lifted from Sinatra's base.rb
+  # for handling the routes.  However, we just needed to
+  # support glob-ish URI references instead of named
+  # parameters, so that's been removed.
+  #
+  # NOTE:  it doesn't exactly support the full UNIX shell glob
+  # syntax (yet)
+
+  def Text.uri_glob_to_regex(path)
+    return path if path.nil? || "" == path
+    special_chars = %w{ . + ( )}
+    pattern = path.gsub(/[\*#{special_chars.join}]/) do |match|
+      case match
+      when '*'
+        "(.*?)"
+      when *special_chars
+        Regexp.escape(match)
+      end
+    end
+    /^#{pattern}$/
   end
 end
 end

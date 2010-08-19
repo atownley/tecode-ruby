@@ -24,34 +24,36 @@
 ######################################################################
 #++
 
+require 'tecode/text'
+
 module TECode
 module Command
   
   class Option
-    attr_reader :long_name, :short_name, :arg, :arg_default, :value
+    attr_reader :long_name, :short_name, :arg, :default
 
     def initialize(long_name, *args, &block)
       @long_name = long_name
       @short_name = args.shift if !args[0].is_a? Hash
       @options = (args[0].is_a?(Hash) ? args[0] : {})
-      @arg_default = @options[:arg_default]
+      @default = @options[:default]
       @has_arg = (@options[:has_arg] ||= false)
       @block = block
-      @matched = false
+      @matched = !@default.nil?
     end
 
-    def execute(parser)
-      if @block.nil?
+    def execute(parser, force = false)
+      if (@block.nil? || (@default && self.value == @default)) && !force
         return
       end
 
-      @block.call(parser, parser.extra_args)
+      @block.call(self.value, parser, parser.extra_args)
     end
 
     def description
       s = @options[:description]
-      if s && arg_default
-        s << " (default is #{arg_default})"
+      if s && default
+        s << " (default is #{default})"
       end
       s
     end
@@ -87,11 +89,11 @@ module Command
 
     def reset
       @arg = nil
-      @matched = false
+      @matched = !@default.nil?
     end
 
     def value
-      @arg || @arg_default
+      @value ||= Text.parse_string(@arg || @default)
     end
 
     def to_s
@@ -101,6 +103,11 @@ module Command
     def to_str
       to_s
     end
+
+    def <=>(rhs)
+      name <=> rhs.name
+    end
+
   end
 
   class RepeatableOption < Option
@@ -131,15 +138,15 @@ module Command
   class OptionGroup
     attr_reader :description
 
-    def initialize(description, options)
-      @description = description
-      @options = options
+    def initialize(*args)
+      @description = args.shift if args[0].is_a? String
+      @options = args
       @index = {}
       @options.each { |o| @index[o.name] = o }
     end
 
     def each(&block)
-      @options.each(&block)
+      @options.sort.each(&block)
     end
 
     def [](key)

@@ -91,5 +91,23 @@ module Command
     end
   end
 
+  class RequiresOneOptionConstraint < OptionConstraint
+    def initialize(parser, exit_status, option, arg)
+      super(parser, exit_status)
+      @option = parser[option]
+      @arg = parser[arg]
+    end
+
+    def message
+      super || \
+        "error:  option '#{@option}' requires '#{@arg}'"
+    end
+
+    def ok?
+      return true if !@option.matched?
+      @option.matched? && @arg.matched?
+    end
+  end
+
 end
 end

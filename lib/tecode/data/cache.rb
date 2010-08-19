@@ -25,6 +25,7 @@
 ######################################################################
 #++
 
+require 'thread'
 require 'tecode/time'
 
 module TECode
@@ -43,6 +44,7 @@ module Data
       @hits = 0
       @accesses = 0
       @name = "Cache-#{self.hash}"
+      @mutex = Mutex.new
     end
 
     # This method resets the size of the cache to the new
@@ -50,15 +52,17 @@ module Data
     # then the cache is appropriately trimmed of objects
 
     def max_size=(newsz)
-      if newsz < size
-        (size - newsz).times do
-          old = @index.delete_at(0)
-          @objects.delete(old.obj)
+      @mutex.synchronize do
+        if newsz < size
+          (size - newsz).times do
+            old = @index.delete_at(0)
+            @objects.delete(old.obj)
+          end
+          resort
         end
-        resort
-      end
 
-      @max_size = newsz
+        @max_size = newsz
+      end
     end
 
     def hit_rate
@@ -73,7 +77,9 @@ module Data
     # another object in the cache, the old object is returned
 
     def cache(object)
-      self[object] = object
+      @mutex.synchronize do
+        self[object] = object
+      end
     end
 
     def <<(obj)
@@ -85,40 +91,44 @@ module Data
     # LRU accesses
 
     def []=(key, val)
-      old = nil
+      @mutex.synchronize do
+        old = nil
 
-      if size == max_size
-        old = @index.delete_at(0)
-        @objects.delete(old.key)
-        old = old.obj
+        if size == max_size
+          old = @index.delete_at(0)
+          @objects.delete(old.key)
+          old = old.obj
+        end
+
+        decorator = KeyedDecorator.new(val)
+        decorator.key = key
+        @objects[key] = decorator
+        @index << decorator
+        resort
+        old
       end
-
-      decorator = KeyedDecorator.new(val)
-      decorator.key = key
-      @objects[key] = decorator
-      @index << decorator
-      resort
-      old
     end
 
     # This method locates the specified object in the cache.
     # If it isn't found, the method returns nil
 
     def [](key)
-      @accesses += 1
-      val = @objects[key]
-      if val
-#        puts "Reset timer for #{key}"
-        @hits += 1
-        val.reset
-        val = val.obj
-        resort
-      end
-#      if (@accesses % 100) == 0
-      if (@accesses % 20) == 0
-        STDERR.puts "Cache '#{@name}' hit rate: #{hit_rate}% over #{accesses} accesses"
-      end
-     val
+      @mutex.synchronize do
+        @accesses += 1
+        val = @objects[key]
+        if val
+  #        puts "Reset timer for #{key}"
+          @hits += 1
+          val.reset
+          val = val.obj
+          resort
+        end
+  #      if (@accesses % 100) == 0
+        if (@accesses % 20) == 0
+  #        STDERR.puts "Cache '#{@name}' hit rate: %0.2f%% over #{accesses} accesses" % [ hit_rate ]
+        end
+       val
+     end
     end
 
     # This method deletes the specific object from the cache
@@ -129,21 +139,25 @@ module Data
     # method instead.
 
     def delete(object)
-      val = @objects.delete(object)
-      if val
-        @index.delete(val)
+      @mutex.synchronize do
+        val = @objects.delete(object)
+        if val
+          @index.delete(val)
+        end
+        val
       end
-      val
     end
 
     # This method removes a particular value from the cache if
     # it meets the given criteria
 
     def delete_if!(&block)
-      @objects = @objects.delete_if do |key, val|
-        if block.call(key, val)
-          @index.delete(val)
-          true
+      @mutex.synchronize do
+        @objects = @objects.delete_if do |key, val|
+          if block.call(key, val)
+            @index.delete(val)
+            true
+          end
         end
       end
     end

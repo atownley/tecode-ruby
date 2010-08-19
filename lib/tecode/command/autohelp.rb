@@ -76,19 +76,19 @@ module Command
   
   module AutoHelp
     def help_options
-      OptionGroup.new("Help options", [
+      OptionGroup.new("Help options",
         Option.new("help", "?",
-          :description => "show this help message") do |parser, args|
+          :description => "show this help message") do |me, parser, args|
             parser.help()
-            exit 0
+            Kernel.exit 0
           end,
 
         Option.new("usage",
-          :description => "show brief usage message") do |parser, args|
+          :description => "show brief usage message") do |me, parser, args|
             parser.usage()
-            exit 0
+            Kernel.exit 0
           end
-      ])
+      )
     end
 
     def format_usage(groups)
@@ -119,6 +119,7 @@ module Command
       line << "\n"
       list << line
       groups.reverse_each do |desc, options|
+        desc = desc || "#{app_name} options"
         s = desc.wrap(80) << ":\n"
         options.each do |o|
           line = "  "

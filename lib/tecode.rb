@@ -27,13 +27,16 @@
 
 require 'rubygems'
 
+require 'tecode/object'
 require 'tecode/data'
 require 'tecode/time'
 require 'tecode/trace'
 require 'tecode/mime'
 require 'tecode/mixin'
+require 'tecode/host'
 require 'tecode/io/ini'
 require 'tecode/io/properties'
+require 'tecode/shell'
 require 'tecode/table/table_model'
 require 'tecode/table/array_table_model'
 require 'tecode/table/hash_table_model'
@@ -46,6 +49,7 @@ require 'tecode/ui/notification'
 require 'tecode/ui/selection'
 require 'tecode/ui/menu'
 require 'tecode/ui/console/progress_monitor'
+require 'tecode/xml'
 
 module TECode
   # Formats the exception (I'm sure there's a way to do

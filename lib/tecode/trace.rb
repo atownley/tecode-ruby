@@ -111,7 +111,7 @@ module Trace
     t = Trace.__trace_instance(self.class)
     if t.will_trace? level
       method = args.shift
-      start = Time.now
+      t.reset_clock
       returned = false
       begin
         if args.length == 0
@@ -129,7 +129,7 @@ module Trace
         if !returned
           t.tputs(1, "*** warning:  detected return inside trace block for '#{method}'!")
         end
-        t.trace_end(method, Time.now - start)
+        t.trace_end(method)
       end
     else
       return block.call(t)
@@ -184,6 +184,19 @@ class Tracer
   def initialize(trace_name, maturity = 0)
     @trace_name = trace_name
     @maturity = maturity
+    @started = Time.now
+  end
+
+  def reset_clock
+    @started = Time.now
+  end
+
+  def elapsed
+    Time.now - @started
+  end
+
+  def elapsed_s
+    "%0.5f" % (elapsed)
   end
 
   def tputs(threshold, *args)
@@ -231,9 +244,9 @@ class Tracer
     return ex
   end
 
-  def trace_end(method, elapsed = nil)
-    s = "" << " (elapsed: " << "%0.5f" % (elapsed) << ")" if !elapsed.nil?
+  def trace_end(method)
     return if !will_trace? 1
+    s = "" << " (elapsed: " << "%0.5f" % (elapsed) << ")"
     tputs 1, "method :#{method} end#{s}"
   end
 
@@ -265,16 +278,17 @@ private
     elsif obj.is_a? String
       s << "\"#{obj}\""
     elsif obj.is_a? Array
-      if obj.length > 10
-        s << "[ " << "Array of size = #{obj.length}; " <<  format_arr(obj[0..9]) << ", ... ]"
-      else
-        s << "[ " << format_arr(obj) << " ]"
-      end
+#      if obj.length > 10
+#        s << "[ " << "Array of size = #{obj.length}; " <<  format_arr(obj[0..9]) << ", ... ]"
+        s << "[ " << "Array of size = #{obj.length} ]"
+#      else
+#        s << "[ " << format_arr(obj) << " ]"
+#      end
     elsif obj.is_a? Hash
       if obj.size > 10
-        s << " Hash of size = #{obj.size}; Key preview: [ " << format_arr(obj.keys[0..9]) << ", ... ]
+        s << " Hash of size = #{obj.size}; Key preview: [ " << format_arr(obj.keys[0..9]) << ", ... ]"
       else
-        s << "#{obj}"  << " (#{obj.class})"
+        s << "#{obj.inspect}"  << " (#{obj.class})"
       end
     else
       s << "#{obj}"  << " (#{obj.class})"

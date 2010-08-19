@@ -35,6 +35,9 @@ module Data
 
   class SharedCollection
     def initialize(collection, manage_locks = true)
+      if collection.nil?
+        raise ArgumentError, "Collection cannot be nil!"
+      end
       @collection = collection
       @sessions = {}
       @mutex = Mutex.new

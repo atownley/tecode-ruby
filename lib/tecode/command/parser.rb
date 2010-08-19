@@ -43,6 +43,7 @@ module Command
       @constraints = []
       @extra_args = []
       @arg_help = arg_help
+      @exec_list = []
 
       add_options(help_options)
 
@@ -71,6 +72,8 @@ module Command
         obj = RequiredOptionConstraint.new(self, *args)
       when :requires_any
         obj = RequiresAnyOptionConstraint.new(self, *args)
+      when :requires, :requires_one
+        obj = RequiresOneOptionConstraint.new(self, *args)
       else
         return
       end
@@ -78,11 +81,14 @@ module Command
       @constraints << obj
     end
 
-    def execute(args, &block)
+    def execute(args, default = nil, &block)
       parse(args)
       check_constraints
-      execute_options
-      block.call(extra_args)
+      if block
+        pre_execute_block
+        block.call(extra_args)
+      end
+      execute_options(default)
     end
 
     def help
@@ -101,19 +107,28 @@ module Command
     def parse(args)
       while args.length > 0 do
         s = args.shift
+#        puts "processing: '#{s}'"
         opt = nil
         val = nil
         case s
-        when /^--([^-=\s]+)=?(.*)$/
+        when /^--([^=\s]+)=?(.*)$/
           name = $1
           val = $2
           opt = @lnames[name]
+          if !opt
+            warn "skipping unrecognized option '#{s}'..."
+            next
+          end
           if opt && opt.expects_arg? && "" == val
             val = args.shift
           end
         when /^-([^-\s])$/
           name = $1
           opt = @snames[name]
+          if !opt
+            warn "skipping unrecognized option '#{s}'..."
+            next
+          end
           if opt && opt.expects_arg?
             val = args.shift
           end
@@ -121,6 +136,7 @@ module Command
 
         if opt
           opt.matched(val)
+          @exec_list << opt
         else
           @extra_args << s
         end 
@@ -132,13 +148,22 @@ module Command
         if !c.ok?
           STDERR.puts c.message << ".  Exiting."
           usage
-          exit c.exit_status
+          Kernel.exit c.exit_status
         end
       end
     end
 
-    def execute_options
-      @option_index.values.each { |o| o.execute(self) if o.matched? }
+    def pre_execute_block
+    end
+
+    def execute_options(default = nil)
+      @exec_list.each do |o|
+        o.execute(self)
+      end
+      if default && @exec_list.length == 0
+        default = self[default]
+        default.execute(self, true) 
+      end
     end
 
     def register_option(option)

@@ -37,6 +37,7 @@ module Data
 
   class PagedCollection < SharedCollection
     def new_session(pagesize = 20)
+      pagesize = 20 if pagesize.nil?
       manage_session(PageSession.new(self, pagesize))
     end
   end
@@ -119,6 +120,7 @@ module Data
     end
 
     def go_to(page)
+      raise ArgumentError, "Page cannot be nil!" if page.nil?
       raise InvalidSessionError, "Collection session has been invalidated" if !valid?
       if page < 0
         page = pages + page + 1
@@ -136,6 +138,7 @@ module Data
 
     def pages
       raise InvalidSessionError, "Collection session has been invalidated" if !valid?
+
       _pages = size / page_size
       if size % page_size > 0
         _pages += 1

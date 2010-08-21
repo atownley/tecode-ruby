@@ -81,14 +81,32 @@ module Command
       @constraints << obj
     end
 
+    # This method will actually execute all of the matched
+    # options and call the optional block to allow command
+    # execution to take place.
+    #
+    # The timing of when the optional block is called is
+    # dependent on whether the value of 'default' is present
+    # or not.  If present, 'default' specifies a default
+    # option to execute of no options are matched and the
+    # block is executed prior to the options to allow
+    # appropriate environment configuration to be performed
+    # before the default is executed.
+    #
+    # If the default is not present, then the options are
+    # executed before the optional block is called, and the
+    # main application processing can be performed within the
+    # optional block.
+
     def execute(args, default = nil, &block)
       parse(args)
       check_constraints
+      pre_execute_block
+      execute_options(default) if !default
       if block
-        pre_execute_block
         block.call(extra_args)
       end
-      execute_options(default)
+      execute_options(default) if default
     end
 
     def help
@@ -136,7 +154,7 @@ module Command
 
         if opt
           opt.matched(val)
-          @exec_list << opt
+          @exec_list << opt if opt.has_block?
         else
           @extra_args << s
         end 

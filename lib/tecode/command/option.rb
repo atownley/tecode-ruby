@@ -108,6 +108,9 @@ module Command
       name <=> rhs.name
     end
 
+    def has_block?
+      @block
+    end
   end
 
   class RepeatableOption < Option

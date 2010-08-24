@@ -71,7 +71,7 @@ module Command
     end
 
     def name
-      @long_name
+      @long_name || @short_name
     end
 
     def show_arg_in_help?

@@ -1,0 +1,195 @@
+#! /usr/bin/env ruby
+#--
+######################################################################
+#
+# Copyright (c) 2008, Andrew S. Townley
+# All rights reserved.
+# 
+# Permission to use, copy, modify, and disribute this software for
+# any purpose with or without fee is hereby granted, provided that
+# the above copyright notices and this permission notice appear in
+# all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHORS DISCLAIM ALL
+# WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS.  IN NO EVENT SHALL THE
+# AUTHORS BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT OR
+# CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+# LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT,
+# NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#
+# File:        distbundle
+# Author:      Andrew S. Townley
+# Created:     Thu  2 Sep 2010 23:44:44 IST
+#
+######################################################################
+#++
+
+require 'rubygems'
+require 'rake'
+require 'yaml'
+require 'fileutils'
+require 'zip/zip'
+require 'tecode/command'
+require 'tecode/file'
+require 'tecode/zip'
+
+# This utility builds distribution packages based on the rules
+# specified in a YAML-formatted package bundle definition.
+# There are many other tools like this around, but this one 
+# does what I need it to do.
+#
+# The bundle package definition provides support for the
+# following symbol keys:
+#
+# - project: specify the name of the project.  This name will
+#   be the used as the basis for the distribution package.  If
+#   not present, the default 'latest' will be used instead.
+#
+# - rootdir: the root of the things to bundle.  Normally, this
+#   is the top-level directory of the source tree or other
+#   hierarcy.  If not specified, the directory where the
+#   bundle definition is found is used as the default.
+#
+# - distdir: specify the distribution directory name for the
+#   intermediate build.  This directory will be included by
+#   default in the distribution zip (see :omit_distdir), so it
+#   might be useful to override the default name 'dist'.
+#
+# - filelist: an array files to be bundled.  Supports Rake
+#   FileList patterns.
+#
+# - exclude: an array of exclude patters.  Supports Rake
+#   FileList patterns.
+#
+# - rename_list: a hash of old -> new names relative to the
+#   root.
+#
+# - omit_distdir: tells the utility to junk the top-level path
+#   when creating the distribution archive.  This means that
+#   when the bundle is unpacked, it will unpack into the
+#   user's current directory, so make sure that this is the
+#   behavior you really want.
+#
+# - version: (optional) a string to be appended to the end of
+#   the distribution.  If not present, the UTC timestamp will
+#   be used instead.
+#
+# - mergelist: (optional) an array of bundle definitions to
+#   merge into the current bundle
+
+parser = TECode::Command::Parser.new(__FILE__, "[ BUNDLE_DEF ]")
+parser.add_options(TECode::Command::OptionGroup.new(
+  TECode::Command::Option.new("distdir", "d",
+    :description => "override the default distribution directory",
+    :help => "DIRECTORY",
+    :has_arg => true,
+    :default => "dist")
+  )
+)
+
+def timenow
+  time = Time.now
+  sprintf("%04d%02d%02d%02d%02d%02d", time.year, time.month,
+            time.day, time.hour, time.min, time.sec)
+end
+
+def process_bundle(parser, bundle_file, dist = nil, clean_dist = false)
+  if File.exist?(bundle_file)
+    bundle = YAML.load(File.new(bundle_file))
+  else
+    parser.err_exit(1, "bundle definition '#{bf}' does not exist")
+  end
+
+  rootdir = bundle[:rootdir] || File.dirname(bundle_file)
+  distdir = dist || bundle[:distdir] || "dist"
+  
+  if !dist && distdir =~ /^[\d\w\.]/
+    # relative path, so make it relative to the root and
+    # expand it
+    distdir = File.join(rootdir, distdir)
+  end
+  fpdistdir = File.expand_path(distdir)
+  fprootdir = File.expand_path(rootdir)
+
+  # sanity check
+  if File.canonical_path(fpdistdir) == File.canonical_path(rootdir)
+    parser.err_exit(2, "distdir cannot be #{rootdir}")
+  end
+
+  project = bundle[:project] || "latest"
+  version = bundle[:version] || timenow
+
+  if !File.exist? fpdistdir
+    parser.info("specified distdir '#{fpdistdir}' does not exist.  Creating it.")
+    FileUtils.mkdir(fpdistdir)
+  else
+    if clean_dist
+      parser.info("removing existing files from '#{fpdistdir}'...")
+      FileUtils.rm_r Dir.glob(File.join(fpdistdir, "*"))
+    end
+  end
+
+  # take care of merging any bundles
+  (bundle[:mergelist] || bundle[:merge_list] || []).each do |mf|
+    parser.info "merging bundle: #{mf}"
+    process_bundle(parser, mf, fpdistdir, false)
+    FileUtils.cd fprootdir
+  end
+    
+  # rename all of the specified files
+  (bundle[:rename_list] || bundle[:renamelist] || []).each do |orig, targ|
+    FileUtils.cp(File.join(rootdir, orig), File.join(fpdistdir, targ))
+  end
+
+  # Now, we do the job
+  FileUtils.cd fprootdir
+  excludes = bundle[:exclude] || bundle[:exclude_list] || []
+  
+  Rake::FileList.new(*bundle[:filelist]).exclude(*excludes).each do |f|
+    parser.info "bundling #{f} => #{File.join(fpdistdir, f)}"
+    targ = File.join(fpdistdir, f)
+    if !File.exist?(dd = File.dirname(targ))
+      FileUtils.mkdir dd
+    end
+
+    if File.directory?(f)
+      FileUtils.mkdir targ if !File.exist?(targ)
+    else
+      FileUtils.cp f, targ
+    end
+  end
+
+  # update the bundle and pass it back to the caller
+  bundle[:version] = version
+  bundle[:project] = project
+  bundle[:rootdir] = File.expand_path(rootdir)
+  bundle[:distdir] = distdir
+  bundle
+end
+
+parser.execute(ARGV) do |extras|
+  bf = extras[0] || "package.dbundle"
+
+  opt = parser["distdir"]
+  distdir = opt.value if opt.matched?
+  bundle = process_bundle(parser, bf, distdir)
+
+  # create the archive
+  project = bundle[:project]
+  version = bundle[:version]
+  distdir = bundle[:distdir]
+
+  zipname = File.join(bundle[:rootdir], "#{project}-#{version}.zip")
+  if bundle[:omit_distdir]
+    Dir.chdir(distdir)
+    TECode::ZipFile.open(zipname) do |zip|
+      zip.add(".")
+    end
+  else
+    TECode::ZipFile.open(zipname) do |zip|
+      zip.add(distdir)
+    end
+  end
+end

@@ -1,0 +1,10 @@
+# Fri  3 Sep 2010 11:36:35 IST
+# Source distribution bundle for TECode/Ruby
+
+:project: TECode-Ruby
+:distdir: tecode-ruby
+:exclude:
+ - *.zip
+
+:filelist:
+ - *

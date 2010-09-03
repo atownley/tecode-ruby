@@ -28,7 +28,7 @@ require 'orderedhash'
 
 module TECode
 module Command
-  
+
   class Parser
     include AutoHelp
 
@@ -46,6 +46,14 @@ module Command
       @exec_list = []
 
       add_options(help_options)
+      add_options(OptionGroup.new("Output options",
+        Option.new("verbose",
+          :description => "display informational status messages during execution"),
+
+        Option.new("debug",
+          :description => "display debugging information messages during execution")
+        )
+      )
 
       if File.exist? app_name
         @app_name = File.basename(app_name)
@@ -119,6 +127,39 @@ module Command
 
     def [](key)
       ( @lnames[key] || @snames[key] )
+    end
+
+    def verbose?
+      self["verbose"].matched?
+    end
+
+    def debug?
+      self["debug"].matched?
+    end
+
+    def info(msg)
+      STDERR.puts msg if verbose?
+    end
+
+    def warn(msg)
+      STDERR.puts "warning: " << msg
+    end
+
+    def debug(msg)
+      STDERR.puts msg if debug?
+    end
+
+    def err_exit(exit_code, msg)
+      error(msg, exit_code)
+    end
+
+    def error(msg, exit_code = nil)
+      msg = "error:  #{msg}"
+      if exit_code
+        msg << ".  Exiting."
+      end
+      STDERR.puts msg
+      exit exit_code if exit_code
     end
 
   protected

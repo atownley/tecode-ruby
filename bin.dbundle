@@ -1,0 +1,12 @@
+# Fri  3 Sep 2010 11:36:35 IST
+# Binary distribution bundle for TECode/Ruby
+
+:project: TECode-Ruby-bin
+:distdir: tecode-ruby
+
+:rename_list:
+  LICENSE: LICENSE.tecode
+ 
+:filelist:
+ - bin/**/*
+ - lib/**/*

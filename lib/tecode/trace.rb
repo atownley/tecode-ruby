@@ -207,7 +207,7 @@ class Tracer
   
   def will_trace?(threshold)
     thresh = (@maturity * 10) + threshold
-#    puts "maturity: #{@maturity}; thresh: #{thresh}; will trace? #{Trace.level >= thresh}"
+#    puts "#{@trace_name} maturity: #{@maturity}; thresh: #{thresh}; will trace? #{Trace.level >= thresh}"
     Trace.level >= thresh
   end
 
@@ -278,12 +278,11 @@ private
     elsif obj.is_a? String
       s << "\"#{obj}\""
     elsif obj.is_a? Array
-#      if obj.length > 10
-#        s << "[ " << "Array of size = #{obj.length}; " <<  format_arr(obj[0..9]) << ", ... ]"
-        s << "[ " << "Array of size = #{obj.length} ]"
-#      else
-#        s << "[ " << format_arr(obj) << " ]"
-#      end
+      if obj.length > 10
+        s << "[ " << "Array of size = #{obj.length}; " <<  format_arr(obj[0..9]) << ", ... ]"
+      else
+        s << "[ " << format_arr(obj) << " ]"
+      end
     elsif obj.is_a? Hash
       if obj.size > 10
         s << " Hash of size = #{obj.size}; Key preview: [ " << format_arr(obj.keys[0..9]) << ", ... ]"

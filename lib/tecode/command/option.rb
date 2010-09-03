@@ -39,7 +39,7 @@ module Command
       @default = @options[:default]
       @has_arg = (@options[:has_arg] ||= false)
       @block = block
-      @matched = !@default.nil?
+      @matched = false
     end
 
     def execute(parser, force = false)

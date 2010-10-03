@@ -109,8 +109,8 @@ module Trace
 
   def trace(level, *args, &block)
     t = Trace.__trace_instance(self.class)
+    method = args.shift
     if t.will_trace? level
-      method = args.shift
       t.reset_clock
       returned = false
       begin
@@ -119,7 +119,7 @@ module Trace
         else
           t.trace_start_with_args(method, *args)
         end
-        rc = block.call(t)
+        rc = block.call(t, method)
         returned = true
         return t.trace_return(method, rc)
       rescue => e
@@ -132,7 +132,7 @@ module Trace
         t.trace_end(method)
       end
     else
-      return block.call(t)
+      return block.call(t, method)
     end
   end
 
@@ -207,7 +207,7 @@ class Tracer
   
   def will_trace?(threshold)
     thresh = (@maturity * 10) + threshold
-#    puts "#{@trace_name} maturity: #{@maturity}; thresh: #{thresh}; will trace? #{Trace.level >= thresh}"
+#    puts "maturity: #{@maturity}; thresh: #{thresh}; will trace? #{Trace.level >= thresh}"
     Trace.level >= thresh
   end
 
@@ -278,11 +278,12 @@ private
     elsif obj.is_a? String
       s << "\"#{obj}\""
     elsif obj.is_a? Array
-      if obj.length > 10
-        s << "[ " << "Array of size = #{obj.length}; " <<  format_arr(obj[0..9]) << ", ... ]"
-      else
-        s << "[ " << format_arr(obj) << " ]"
-      end
+#      if obj.length > 10
+#        s << "[ " << "Array of size = #{obj.length}; " <<  format_arr(obj[0..9]) << ", ... ]"
+        s << "[ " << "Array of size = #{obj.length} ]"
+#      else
+#        s << "[ " << format_arr(obj) << " ]"
+#      end
     elsif obj.is_a? Hash
       if obj.size > 10
         s << " Hash of size = #{obj.size}; Key preview: [ " << format_arr(obj.keys[0..9]) << ", ... ]"

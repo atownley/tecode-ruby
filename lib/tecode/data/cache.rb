@@ -86,6 +86,10 @@ module Data
       cache(obj)
     end
 
+    def has_key? key
+      @objects.has_key? key
+    end
+
     # This allows caching with a different key than the
     # object.  The same behavior still applies with regard to
     # LRU accesses
@@ -100,11 +104,20 @@ module Data
           old = old.obj
         end
 
-        decorator = KeyedDecorator.new(val)
-        decorator.key = key
-        @objects[key] = decorator
-        @index << decorator
-        resort
+        # could be and update to existing key
+        if(decorator = @objects[key])
+          #puts "UPDATE OF EXISTING ENTRY"
+          old = decorator.obj
+          @objects[key] = KeyedDecorator.new(key, val)
+        else
+          #puts "ADD NEW ENTRY"
+          # add a new key
+          decorator = KeyedDecorator.new(key, val)
+          @objects[key] = decorator
+          @index << decorator
+          resort
+          old
+        end
         old
       end
     end
@@ -168,6 +181,15 @@ module Data
       @objects.keys
     end
 
+    def each(&block)
+      @objects.values.each do |val|
+        if val.is_a? KeyedDecorator
+          val = val.obj
+        end
+        block.call(val)
+      end    
+    end
+
     def dump
       @index.each do |td|
         puts "#{td.obj} - #{td.elapsed}: #{td.created.sec}.#{td.created.usec}"
@@ -186,6 +208,10 @@ module Data
 
     class KeyedDecorator < TECode::TimerDecorator
       attr_accessor :key
+      def initialize(key, val)
+        @key = key
+        super(val)
+      end
     end
   end
 

@@ -99,7 +99,7 @@ def process_bundle(parser, bundle_file, dist = nil, clean_dist = false)
   if File.exist?(bundle_file)
     bundle = YAML.load(File.new(bundle_file))
   else
-    parser.err_exit(1, "bundle definition '#{bf}' does not exist")
+    parser.err_exit(1, "bundle definition '#{bundle_file}' does not exist")
   end
 
   rootdir = bundle[:rootdir] || File.dirname(bundle_file)
@@ -134,6 +134,9 @@ def process_bundle(parser, bundle_file, dist = nil, clean_dist = false)
   # take care of merging any bundles
   (bundle[:mergelist] || bundle[:merge_list] || []).each do |mf|
     parser.info "merging bundle: #{mf}"
+    if mf =~ /^[\w\d\.]/
+      mf = File.expand_path(File.join(fprootdir, mf))
+    end
     process_bundle(parser, mf, fpdistdir, false)
     FileUtils.cd fprootdir
   end
@@ -145,7 +148,7 @@ def process_bundle(parser, bundle_file, dist = nil, clean_dist = false)
 
   # Now, we do the job
   FileUtils.cd fprootdir
-  excludes = bundle[:exclude] || bundle[:exclude_list] || []
+  excludes = bundle[:excludes] || bundle[:exclude] || bundle[:exclude_list] || []
   
   Rake::FileList.new(*bundle[:filelist]).exclude(*excludes).each do |f|
     parser.info "bundling #{f} => #{File.join(fpdistdir, f)}"
@@ -182,6 +185,7 @@ parser.execute(ARGV) do |extras|
   distdir = bundle[:distdir]
 
   zipname = File.join(bundle[:rootdir], "#{project}-#{version}.zip")
+  parser.info "creating archive '#{zipname}'"
   if bundle[:omit_distdir]
     Dir.chdir(distdir)
     TECode::ZipFile.open(zipname) do |zip|

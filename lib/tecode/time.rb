@@ -124,6 +124,7 @@ module TECode
     def method_missing(method, *args, &block)
       @obj.send(method, *args, &block)
     end
+
   end
 
   SEC_IN_DAY  = 86400
@@ -132,19 +133,61 @@ module TECode
   # This method returns a hash containing the number of
   # days, hours and minutes of uptime.
 
-  def TECode::calc_uptime(seconds)
+  def self.calc_uptime(seconds)
     result = {}
-    seconds = seconds.to_i
 
     # I'm sure there's a better way, but it's 2AM...
     x = seconds / 60
-    result["hours"] = x / 60
-    result["minutes"] = x - (60 * result["hours"])
-    result["days"] = result["hours"] / 24
-    result["hours"] = result["hours"] - (24 * result["days"])
+    result["hours"] = (x / 60).to_i
+    result["minutes"] = (x - (60 * result["hours"])).to_i
+    result["days"] = (result["hours"] / 24).to_i
+    result["hours"] = (result["hours"] - (24 * result["days"])).to_i
     result["seconds"] = seconds - (SEC_IN_DAY*result["days"] +
           SEC_IN_HOUR*result["hours"] + 60*result["minutes"])
 
     result
   end
+ 
+  def self.format_uptime(seconds)
+    return "0s" if seconds == 0
+
+    ut = calc_uptime(seconds)
+    s = ""
+    s << "%dd" % ut["days"] if ut["days"] > 0
+    s << "%dh" % ut["hours"] if ut["hours"] > 0
+    s << "%dm" % ut["minutes"] if ut["minutes"] > 0
+    s << "%0.5fs" % ut["seconds"]
+  end
+
+  class TimingContext < TimerDecorator
+    def to_s
+      "%0.5f" % elapsed
+    end
+
+    def started
+      "Task #{obj} started at #{@created}"
+    end
+
+    def status
+      "Task #{obj} running for #{self}"
+    end
+
+    def completed
+      "Task #{obj} completed in #{self}"
+    end  
+
+    def puts(msg)
+      STDOUT.puts "Task #{obj} at #{self}: #{msg}"
+    end
+  end
+
+  def self.time(desc, verbose = false, &block)
+    return if block.nil?
+    tc = TimingContext.new(desc)
+    puts tc.started if verbose
+    rval = block.call(tc)
+    puts tc.completed if verbose
+    rval
+  end
+
 end

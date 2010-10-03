@@ -28,6 +28,55 @@
 $KCODE='u'
 require 'jcode'
 
+# From http://blog.evanweaver.com/articles/2006/09/03/smart-plaintext-wrapping/
+# with a few tweaks...
+
+class String
+
+  def wrap(width, hanging_indent = 0, magic_lists = false, &block)
+    lines = self.split(/\n/)
+
+    lines.collect! do |line|
+
+      if magic_lists 
+        line =~ /^([\s\-\d\.\:]*\s)/
+      else 
+        line =~ /^([\s]*\s)/
+      end
+
+      indent = $1.length + hanging_indent rescue hanging_indent
+
+      buffer = ""
+      first = true
+
+      while line.length > 0
+        first ? (i, first = 0, false) : i = indent              
+        pos = width - i
+
+        if line.length > pos and line[0..pos] =~ /^(.+)\s/
+          subline = $1
+        else 
+          subline = line[0..pos]
+        end
+        lbuf = " " * i + subline + "\n"
+        lbuf = block.call(lbuf) if block
+        buffer += lbuf
+        line.tail!(subline.length - 1)
+      end
+      buffer[0..-2]
+    end
+
+    lines.join("\n")
+
+  end
+
+  def tail!(pos)
+    self[0..pos] = ""
+    strip!
+  end
+
+end
+
 module TECode
 module Text
   DIGIT     = %r{[-+]?\d+(?:\.?\d+)?}

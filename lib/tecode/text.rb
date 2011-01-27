@@ -27,6 +27,7 @@
 
 $KCODE='u'
 require 'jcode'
+require 'parsedate'
 
 # From http://blog.evanweaver.com/articles/2006/09/03/smart-plaintext-wrapping/
 # with a few tweaks...
@@ -199,6 +200,202 @@ module Text
       end
     end
     /^#{pattern}$/
+  end
+
+  # This method is a bit of a hack to help parse
+  # internationalized dates using the same characters as
+  # strftime(3).  If no format is given, it will fall back to
+  # ParseDate
+
+  def self.parse_date(str, fmt = nil, utc = false)
+    if !fmt
+      rval = ParseDate.parsedate(str)
+    else
+      params = []
+      regex = ""
+      fmt.scan(/%([a-zA-Z*])+|([-:\/\s])/) do |match|
+#        puts "match: #{match.inspect}"
+        params << match[0] if match[0]
+        case(match[0] || match[1])
+        when 'A'
+          # full weekday name
+          regex << '(\w+)'
+        when 'a'
+          # local abbreviated weekday name
+          regex << '(\w{3})'
+        when 'B'
+          # full month name
+          regex << '(\w+)'
+        when 'b', 'h'
+          # abbreviated month name
+          regex << '(\w{3})'
+        when 'C'
+          regex << '(\d{2})'
+        when 'c'
+          # national representation of time and date
+          raise ArgumentError, "'standard' locale parsing is not currently supported"
+        when 'D'
+          # '%m/%d/%y'
+          rval = ParseDate.parsedate(str)
+          break
+        when 'd'
+          # day of month (01-31)
+          # NOTE: we're being more flexible than we need to be
+          regex << '(\d{1,2})'
+        when 'E', 'O'
+          raise ArgumentError, "POSIX locale extensions are not currently supported"
+        when 'e'
+          # month as decimal number (1-31) with optional
+          # leading blank for single digits
+          regex << '\s*(\d{1,2})'
+        when 'F'
+          # '%Y-%m-%d'
+          rval = ParseDate.parsedate(str)
+          break
+        when 'G'
+          # year with century
+          regex << '(\d{4})'
+        when 'g'
+          # year without century (00-99)
+          regex << '(\d{2})'
+        when 'H'
+          # 24 hour clock (00-23)
+          regex << '(\d{1,2})'
+        when 'I'
+          # 12 hour cloc (01-12)
+          regex << '(\d{1,2})'
+        when 'j'
+          # day of year as decimal number
+          regex << '(\d{3})'
+        when 'k'
+          # hour (24-hour clock) as decimal with optional
+          # leading blank
+          regex << '\s*(\d{1,2})'
+        when 'l'
+          # hour (12-hour clock) as decimal number (1-12) with
+          # optional leading blanks
+          regex << '\s*(\d{1,2})'
+        when 'M'
+          # minute as decimal (leading zeros)
+          regex << '(\d{2})'
+        when 'm'
+          # month as decimal (leading zeros)
+          # note, we're relaxint this
+          regex << '(\d{1,2})'
+        when 'n'
+          # newline (ignored)
+        when 'p'
+          # national am/pm designation
+          raise ArgumentError, "AM/PM locale equivalents not currently supported"
+        when 'R'
+          # equivalent to '%H:%M'
+          regex << '(\d{2}:\d{2})'
+        when 'r'
+          # equivalent to '%I:%M:%S %p'
+          regex << '(\d{2}:\d{2}:\d{2} \w+)'
+        when 'S'
+          # seconds as decimal number
+          regex << '(\d{2})'
+        when 's'
+          # seconds since epoch
+          regex << '(\d+)'
+        when 'T'
+          # equivalent to '%H:%M:%S'
+          regex << '(\d{2}:\d{2}:\d{2})'
+        when 'U'
+          # week number of the year
+          regex << '(\d{2})'
+        when 'u'
+          # weekday starting with Monday
+          regex << '(\d)'
+        when 'V'
+          # week number in year
+          regex << '(\d{2})'
+        when 'v'
+          # equivalent to '%e-%b-%Y'
+          regex << '\s*(\d{1,2}-\w{3}-\d{4}'
+        when 'W'
+          # Week number for the year as decimal
+          regex << '(\d{2})'
+        when 'w'
+          # weekday (Sunday as first day)
+          regex << '(\d)'
+        when 'X'
+          # national representation of the time
+          raise ArgumentError, "national time representation not supported"
+        when 'x'
+          # national representation of the date
+          raise ArgumentError, "national date representation not supported"
+        when 'Y'
+          # year with century
+          regex << '(\d{4})'
+        when 'y'
+          # year without century
+          regex << '(\d{2})'
+        when 'Z'
+          # time zone name
+          regex << '(\w{3})'
+        when 'z'
+          # UTC offset with leading +/-
+          regex << '([-+]\d{4})'
+        when '+'
+          # national representation similar to date(1)
+          raise ArgumentError, "national datetime representation not supported"
+        when '/'
+          regex << '\/'
+        else
+          regex << (match[0] || match[1])
+        end
+      end
+      regex = Regexp.new(regex)
+# puts "PARAMS: #{params.inspect}" 
+# puts "REGEX: #{regex.inspect}" 
+      # parsedate gives year (0), month (1), day of month (2),
+      # hour (3), minute (4), second (5), timezone (6), 
+      # day of week (7)
+      #
+      # FIXME: this isn't as robust as it probably should
+      # be...
+      rval = [ nil, nil, nil, nil, nil, nil, nil, nil ]
+      if match = str.match(/#{regex}/)
+        match.captures.each do |c|
+          case(params.shift)
+          when 'z', 'Z'
+            rval[6] = c
+          when 'y'
+            c = c.to_i
+            if c < 30
+              rval[0] = 2000 + c
+            else
+              rval[0] = 1900 + c
+            end
+          when 'Y'
+            rval[0] = c.to_i
+          when 'm'
+            rval[1] = c.to_i
+          when 'd'
+            rval[2] = c.to_i
+          when 'H'
+            rval[3] = c.to_i
+          when 'M'
+            rval[4] = c.to_i
+          when 'S'
+            rval[5] = c.to_i
+          when 'w', 'u'
+            rval[7] = c.to_i
+          end
+        end
+      else
+        raise ArgumentError, "Failed to parse '#{str}' with format '#{fmt}' (regex: #{regex.inspect})"
+      end
+    end
+
+#  puts "RVAL: #{rval.inspect}"
+    if utc
+      Time.utc(*rval)
+    else
+      Time.local(*rval)
+    end
   end
 end
 end

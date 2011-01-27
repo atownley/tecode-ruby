@@ -70,6 +70,10 @@ module XML
     def has_children?
       children.size > 0
     end
+
+    def has_attributes?
+      @attributes.size > 0
+    end
   end
 
   # This class provides a default message handler
@@ -103,6 +107,14 @@ module XML
     end
 
     module ClassMethods
+      def mapper_class=(klass)
+        @mapper_class = klass
+      end
+
+      def mapper_class
+        @mapper_class || ElementMapping
+      end
+
       def mappings
         @mappings
       end
@@ -208,7 +220,8 @@ module XML
       end
 
       def on_cdata_block(cdata)
-        @messages.warn "ignoring CDATA block: #{cdata}"
+#        @messages.warn "ignoring CDATA block: #{cdata}"
+        stack[-1].text << cdata
       end
 
       def on_characters(chars)
@@ -263,6 +276,27 @@ module XML
           mapping.end_proc.call(@instance, node)
         end
         stack.pop
+      end
+
+      def on_external_subset(name, external_id, system_id)
+        @messages.warn "ignoring external subset #{name} #{external_id} #{system_id}"
+      end
+
+      def on_has_external_subset
+      end
+
+      def on_has_internal_subset
+      end
+
+      def on_internal_subset(name, external_id, system_id)
+        @messages.warn "ignoring internal subset #{name} #{external_id} #{system_id}"
+      end
+
+      def on_is_standalone
+      end
+
+      def on_reference(name)
+        @messages.warn "ignoring reference #{name}"
       end
 
     private

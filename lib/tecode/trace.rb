@@ -137,10 +137,15 @@ module Trace
   end
 
   def mtrace(*args, &block)
-    # this approach was taken from
-    # http://www.ruby-forum.com/topic/75258
-    args.insert 0, (caller[0] =~ /`([^']*)'/ and $1)
-    trace(1, *args, &block)
+    # ADDITIONAL OPTIMIZATION check
+    if will_trace? 1
+      # this approach was taken from
+      # http://www.ruby-forum.com/topic/75258
+      args.insert 0, (caller[0] =~ /`([^']*)'/ and $1)
+      trace(1, *args, &block)
+    else
+      trace(1, "[NOTRACE]", *args, &block)
+    end
   end
 
   def tputs(threshold, *args)

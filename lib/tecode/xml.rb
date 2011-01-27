@@ -27,3 +27,4 @@
 
 require 'tecode/xml/sax_xpath'
 require 'tecode/xml/saxmapper'
+require 'tecode/xml/flat_mapping'

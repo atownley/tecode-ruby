@@ -116,6 +116,8 @@ module Command
   class RepeatableOption < Option
     def initialize(*args)
       super
+      # make sure we expect arguments 
+      @has_arg = true
       @args = []
     end
 

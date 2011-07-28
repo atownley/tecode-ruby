@@ -208,6 +208,7 @@ module Text
   # ParseDate
 
   def self.parse_date(str, fmt = nil, utc = false)
+    return str if !str
     if !fmt
       rval = ParseDate.parsedate(str)
     else
@@ -390,7 +391,7 @@ module Text
       end
     end
 
-#  puts "RVAL: #{rval.inspect}"
+  puts "RVAL: #{rval.inspect}"
     if utc
       Time.utc(*rval)
     else

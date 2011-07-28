@@ -53,10 +53,15 @@ class TECode::ZipFile
       end
     when /^a/
       create = 1
+    when /^r$/
+      if !File.exist? zipfile
+        raise ArgumentError, "file '#{zipfile}' not found."
+      end
     end
 
     @junk_paths = junk_paths
-    @zipfile = Zip::ZipFile.new(zipfile, create)
+    path = File.expand_path(zipfile)
+    @zipfile = Zip::ZipFile.new(path, create)
   end
 
   def <<(path)
@@ -94,6 +99,31 @@ class TECode::ZipFile
       @zipfile.add(entry, path)
     end
     self
+  end
+
+  # This method will extract the contents of the zip file to
+  # the specified location.
+
+  def extract_to(path, overwrite = true)
+    path = File.expand_path(path)
+    if !File.exists? path
+      Dir.mkdir(path)
+    end
+    Dir.chdir(path)
+    extract overwrite
+  end
+
+  # This method will extract the contents of the zip file to
+  # the current directory
+
+  def extract(overwrite = true)
+    root = Dir.getwd
+#    puts "root: #{root}"
+    @zipfile.each do |entry|
+      targ = File.join(root, entry.name)
+#      puts "targ: #{targ}"
+      entry.extract(targ) { overwrite }
+    end
   end
 
   def close

@@ -2,7 +2,7 @@
 #--
 ######################################################################
 #
-# Copyright (c) 2008, Andrew S. Townley
+# Copyright (c) 2008-2011, Andrew S. Townley
 # All rights reserved.
 # 
 # Permission to use, copy, modify, and disribute this software for
@@ -72,9 +72,14 @@ require 'tecode/zip'
 #   user's current directory, so make sure that this is the
 #   behavior you really want.
 #
-# - version: (optional) a string to be appended to the end of
-#   the distribution.  If not present, the UTC timestamp will
-#   be used instead.
+# - version: (optional) a hash specifying the version
+#   information for the distribution bundle.  Files listed for
+#   the stamp key will be processed with variable substituion
+#   of the following:
+#
+#   @version_major@ - the major version of the release (integer)
+#   @version_minor@ - the minor version of the release (integer)
+#   @version_release@ - the release number of the release (string)
 #
 # - mergelist: (optional) an array of bundle definitions to
 #   merge into the current bundle
@@ -119,7 +124,15 @@ def process_bundle(parser, bundle_file, dist = nil, clean_dist = false)
   end
 
   project = bundle[:project] || "latest"
-  version = bundle[:version] || timenow
+  
+  # make sure we have a unique stamp name
+  if version = bundle[:version]
+    ver = "%d.%d.%s" % [ version[:major], version[:minor], version[:release] ]
+    ver = "#{ver}-#{timenow}" if version[:timestamp]
+  else
+    ver = timenow
+  end
+  bundle[:version_name] = ver
 
   if !File.exist? fpdistdir
     parser.info("specified distdir '#{fpdistdir}' does not exist.  Creating it.")
@@ -144,6 +157,37 @@ def process_bundle(parser, bundle_file, dist = nil, clean_dist = false)
   # rename all of the specified files
   (bundle[:rename_list] || bundle[:renamelist] || []).each do |orig, targ|
     FileUtils.cp(File.join(rootdir, orig), File.join(fpdistdir, targ))
+  end
+
+  # stamp any versioned files
+  if version && (stamp = version[:stamp])
+    data = bundle.clone
+    data[:version_major] = version[:major]
+    data[:version_minor] = version[:minor]
+    data[:version_release] = version[:release]
+
+    Rake::FileList.new(*stamp).each do |fn|
+      puts "FN: #{fn}"
+      dirn = File.dirname(fn)
+      if fn =~ /\.in$/
+        fname = fn
+      else
+        fname = "#{fn}.in"
+      end
+      next if !File.exist?(fname)
+      puts "fname: #{fname}"
+      outf = File.open(File.join(dirn, File.basename(fname, ".in")), "w")
+      File.open(fname, "r") do |inf|
+        s = inf.read.gsub(/@([-a-zA-Z0-9_]+)@/) do |key|
+          v = data[$1.to_sym]
+          next v if v
+          key
+        end
+        outf.write s
+      end
+      outf.flush
+      outf.close
+    end
   end
 
   # Now, we do the job
@@ -181,7 +225,7 @@ parser.execute(ARGV) do |extras|
 
   # create the archive
   project = bundle[:project]
-  version = bundle[:version]
+  version = bundle[:version_name]
   distdir = bundle[:distdir]
 
   zipname = File.join(bundle[:rootdir], "#{project}-#{version}.zip")

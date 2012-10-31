@@ -38,7 +38,7 @@ require 'monitor'
 require 'optparse'
 require 'ostruct'
 
-require 'rake/win32'
+#require 'rake/win32'
 
 $trace = false
 
@@ -2167,9 +2167,9 @@ module Rake
       RUBY_PLATFORM =~ /(aix|darwin|linux|(net|free|open)bsd|cygwin|solaris|irix|hpux)/i
     end
     
-    def windows?
-      Win32.windows?
-    end
+#    def windows?
+#      Win32.windows?
+#    end
 
     def truncate(string, width)
       if string.length <= width
@@ -2408,15 +2408,15 @@ module Rake
     end
     
     # The standard directory containing system wide rake files.
-    if Win32.windows?
-      def standard_system_dir #:nodoc:
-        Win32.win32_system_dir
-      end
-    else
+#    if Win32.windows?
+#      def standard_system_dir #:nodoc:
+#        Win32.win32_system_dir
+#      end
+#    else
       def standard_system_dir #:nodoc:
         File.join(File.expand_path('~'), '.rake')
       end
-    end
+#    end
     private :standard_system_dir
 
     # Collect the list of tasks on the command line.  If no tasks are

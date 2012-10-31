@@ -83,6 +83,7 @@ module Text
   DIGIT     = %r{[-+]?\d+(?:\.?\d+)?}
   HEXDIGIT  = %r{[-+]?0x[a-fA-F\d][a-fA-F\d]*}
   QLITERAL  = %r{(?:"(?:[^"\\]|\\.)*")|'(?:[^'\\]|\\.)*'}
+  SHELLVAR  = %r{(.|^)\$\{?([^\}\s]*)\}?}
   
   # This function should be used whenever user-input strings
   # need to be parsed into the corresponding runtime value.
@@ -202,6 +203,38 @@ module Text
     /^#{pattern}$/
   end
 
+  # This method is used to perform simple variable
+  # substitution in strings supporting UNIX Bourne Shell
+  # variable syntax, e.g. $var or ${var} based on the values
+  # of the specified Hash instance.
+  #
+  # If a block is given, it is given the opportunity to
+  # provide a value for the variable instead of the hash.
+
+  def self.shell_expand(str, vars = ENV, &block)
+    # Have to do some contortions to ensure that we aren't
+    # trying to substitute an escaped '$'.
+    # FIXME: there's probably a more elegant way to do this...
+    return str if !str || !str.is_a?(String)
+
+    str.gsub(TECode::Text::SHELLVAR).each do |match|
+      s = $1
+      var = $2
+      # eat the backslash and give the match back 
+      next match[1..-1] if s == "\\"
+      if block
+        val = block.call(var)
+      else
+        if (val = vars[var] || vars[var.to_sym])
+          val
+        else
+          raise ArgumentError, "error: variable '$#{var}' not defined."
+        end
+      end
+      "#{s}#{val}"
+    end
+  end
+  
   # This method is a bit of a hack to help parse
   # internationalized dates using the same characters as
   # strftime(3).  If no format is given, it will fall back to

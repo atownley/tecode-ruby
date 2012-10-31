@@ -44,6 +44,7 @@ module Command
       @extra_args = []
       @arg_help = arg_help
       @exec_list = []
+      @properties = {}
 
       add_options(help_options)
       add_options(OptionGroup.new("Output options",
@@ -115,6 +116,7 @@ module Command
         block.call(extra_args)
       end
       execute_options(default) if default
+      post_execute_block
     end
 
     def help
@@ -126,7 +128,14 @@ module Command
     end
 
     def [](key)
-      ( @lnames[key] || @snames[key] )
+      ( @lnames[key] || @snames[key] || @properties[key] )
+    end
+
+    # This method allows user-defined properties to be added
+    # to the instance without explicit subclassing.
+
+    def []=(key, val)
+      @properties[key] = val
     end
 
     def verbose?
@@ -152,6 +161,7 @@ module Command
     def err_exit(exit_code, msg)
       error(msg, exit_code)
     end
+    alias :die! err_exit
 
     def error(msg, exit_code = nil)
       msg = "error:  #{msg}"
@@ -213,6 +223,9 @@ module Command
     end
 
     def pre_execute_block
+    end
+
+    def post_execute_block
     end
 
     def execute_options(default = nil)

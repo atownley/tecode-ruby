@@ -3,6 +3,11 @@
 
 :project: TECode-Ruby
 :distdir: tecode-ruby
+:version:
+ :major: 1
+ :minor: 0
+ :release: 0
+
 :exclude:
  - *.zip
 

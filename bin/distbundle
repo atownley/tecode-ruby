@@ -83,6 +83,9 @@ require 'tecode/zip'
 #
 # - mergelist: (optional) an array of bundle definitions to
 #   merge into the current bundle
+#
+# - execute: (optional) a hash of paths and commands to be
+#   executed when building the bundle
 
 parser = TECode::Command::Parser.new(__FILE__, "[ BUNDLE_DEF ]")
 parser.add_options(TECode::Command::OptionGroup.new(
@@ -100,6 +103,12 @@ def timenow
             time.day, time.hour, time.min, time.sec)
 end
 
+def expand(str, vars)
+  s = TECode::Text.shell_expand(str, vars)
+  raise RuntimeError, "variable substitution failed!" if s =~ /\$/
+  s
+end
+
 def process_bundle(parser, bundle_file, dist = nil, clean_dist = false)
   if File.exist?(bundle_file)
     bundle = YAML.load(File.new(bundle_file))
@@ -107,8 +116,9 @@ def process_bundle(parser, bundle_file, dist = nil, clean_dist = false)
     parser.err_exit(1, "bundle definition '#{bundle_file}' does not exist")
   end
 
-  rootdir = bundle[:rootdir] || File.dirname(bundle_file)
-  distdir = dist || bundle[:distdir] || "dist"
+  project = expand(bundle[:project], bundle) || "latest"
+  rootdir = expand(bundle[:rootdir], bundle) || File.dirname(bundle_file)
+  distdir = dist || expand(bundle[:distdir], bundle) || "dist"
   
   if !dist && distdir =~ /^[\d\w\.]/
     # relative path, so make it relative to the root and
@@ -123,8 +133,6 @@ def process_bundle(parser, bundle_file, dist = nil, clean_dist = false)
     parser.err_exit(2, "distdir cannot be #{rootdir}")
   end
 
-  project = bundle[:project] || "latest"
-  
   # make sure we have a unique stamp name
   if version = bundle[:version]
     ver = "%d.%d.%s" % [ version[:major], version[:minor], version[:release] ]
@@ -146,6 +154,7 @@ def process_bundle(parser, bundle_file, dist = nil, clean_dist = false)
 
   # take care of merging any bundles
   (bundle[:mergelist] || bundle[:merge_list] || []).each do |mf|
+    mf = expand(mf, bundle)
     parser.info "merging bundle: #{mf}"
     if mf =~ /^[\w\d\.]/
       mf = File.expand_path(File.join(fprootdir, mf))
@@ -155,8 +164,18 @@ def process_bundle(parser, bundle_file, dist = nil, clean_dist = false)
   end
     
   # rename all of the specified files
-  (bundle[:rename_list] || bundle[:renamelist] || []).each do |orig, targ|
-    FileUtils.cp(File.join(rootdir, orig), File.join(fpdistdir, targ))
+  (renames = bundle[:rename_list] || bundle[:renamelist] || {}).each do |orig, targ|
+    orig = expand(orig, bundle)
+    targ = expand(targ, bundle)
+    if File.directory? orig
+      targ = File.join(fpdistdir, targ)
+      if !File.exist?(dn = File.dirname(targ))
+        FileUtils.mkdir_p dn
+      end
+      FileUtils.cp_r(File.join(rootdir, orig), targ)
+    else
+      FileUtils.cp(File.join(rootdir, orig), File.join(fpdistdir, targ))
+    end
   end
 
   # stamp any versioned files
@@ -167,7 +186,7 @@ def process_bundle(parser, bundle_file, dist = nil, clean_dist = false)
     data[:version_release] = version[:release]
 
     Rake::FileList.new(*stamp).each do |fn|
-      puts "FN: #{fn}"
+#      puts "FN: #{fn}"
       dirn = File.dirname(fn)
       if fn =~ /\.in$/
         fname = fn
@@ -175,7 +194,7 @@ def process_bundle(parser, bundle_file, dist = nil, clean_dist = false)
         fname = "#{fn}.in"
       end
       next if !File.exist?(fname)
-      puts "fname: #{fname}"
+#      puts "fname: #{fname}"
       outf = File.open(File.join(dirn, File.basename(fname, ".in")), "w")
       File.open(fname, "r") do |inf|
         s = inf.read.gsub(/@([-a-zA-Z0-9_]+)@/) do |key|
@@ -190,15 +209,34 @@ def process_bundle(parser, bundle_file, dist = nil, clean_dist = false)
     end
   end
 
+  # Finally, run any commands required
+  (bundle[:execute] || {}).each do |path, cmd|
+    path = expand(path, bundle)
+    cmd = expand(cmd, bundle)
+    Dir.chdir(path) do |p|
+      if !(rc = system(cmd))
+        parser.error "command '#{cmd}' exited with non-zero status #{rc}"
+      end
+    end
+  end
+
   # Now, we do the job
   FileUtils.cd fprootdir
   excludes = bundle[:excludes] || bundle[:exclude] || bundle[:exclude_list] || []
-  
+
+  # make sure we exclude any renamed files and the
+  # distribution directory (trimming the relative path in the
+  # event that it's in the same directory)
+  excludes.concat(renames.keys.collect { |n| /^#{n}$/ })
+  dd = distdir.gsub(/^\.\//, "")
+  excludes << /^#{dd}$/
+ 
   Rake::FileList.new(*bundle[:filelist]).exclude(*excludes).each do |f|
+    f = expand(f, bundle)
     parser.info "bundling #{f} => #{File.join(fpdistdir, f)}"
     targ = File.join(fpdistdir, f)
     if !File.exist?(dd = File.dirname(targ))
-      FileUtils.mkdir dd
+      FileUtils.mkdir_p dd
     end
 
     if File.directory?(f)
@@ -224,17 +262,19 @@ parser.execute(ARGV) do |extras|
   bundle = process_bundle(parser, bf, distdir)
 
   # create the archive
-  project = bundle[:project]
-  version = bundle[:version_name]
-  distdir = bundle[:distdir]
+  project = expand(bundle[:project], bundle)
+  version = expand(bundle[:version_name], bundle)
+  distdir = expand(bundle[:distdir], bundle)
+  rootdir = expand(bundle[:rootdir], bundle)
 
-  zipname = File.join(bundle[:rootdir], "#{project}-#{version}.zip")
+  zipname = File.join(rootdir, "#{project}-#{version}.zip")
   parser.info "creating archive '#{zipname}'"
   if bundle[:omit_distdir]
     Dir.chdir(distdir)
     TECode::ZipFile.open(zipname) do |zip|
       zip.add(".")
     end
+    Dir.chdir(rootdir)
   else
     TECode::ZipFile.open(zipname) do |zip|
       zip.add(distdir)

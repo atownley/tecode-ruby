@@ -24,6 +24,7 @@
 ######################################################################
 #++
 
+require 'fileutils'
 require 'zip/zip'
 require 'zip/zipfilesystem'
 
@@ -122,6 +123,13 @@ class TECode::ZipFile
     @zipfile.each do |entry|
       targ = File.join(root, entry.name)
 #      puts "targ: #{targ}"
+      targdir = File.dirname(targ)
+      if !File.exist? targdir
+#        puts "Making directory #{targdir}"
+        FileUtils.mkdir_p(targdir)
+      end
+      
+#      puts "Extracting file #{targ}"
       entry.extract(targ) { overwrite }
     end
   end

@@ -27,7 +27,7 @@
 #++
 
 require 'rubygems'
-require 'rake'
+require 'rake-0.8.7'
 require 'yaml'
 require 'fileutils'
 require 'zip/zip'

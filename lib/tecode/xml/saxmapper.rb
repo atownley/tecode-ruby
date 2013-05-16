@@ -74,6 +74,27 @@ module XML
     def has_attributes?
       @attributes.size > 0
     end
+
+    def to_xml
+      s = "<"
+      if @prefix
+        s << @prefix << ":"
+      end
+      s << qname
+      if @attributes.size > 0
+        @attributes.keys.sort.each do |k|
+          s << " " << k << "=\"" << @attributes[k] << "\""
+        end
+      end
+      s << ">" << text
+      children.each { |c| s << c.to_xml }
+      s << "</"
+      if @prefix
+        s << @prefix << ":"
+      end
+      s << qname << ">"
+    end
+
   end
 
   # This class provides a default message handler
@@ -133,9 +154,9 @@ module XML
           if qname.nil? && args[0][:xpath].nil?
             raise ArgumentError, "one of a tag name (either arg[0] or :tag => TAGNAME) or an xpath value (:xpath => XPATH) must be specified!"
           end
-          mapping = ElementMapping.new(qname, args[0])
+          mapping = self.mapper_class.new(qname, args[0])
         else
-          mapping = ElementMapping.new(*args)
+          mapping = self.mapper_class.new(*args)
         end
         mapping.instance_eval(&block) if block_given?
         @mappings[mapping.qname] = mapping
@@ -157,8 +178,8 @@ module XML
     # This class represents a single element mapping instance.
 
     class ElementMapping
-      attr_accessor :qname, :nsuri, :xpath
-      attr_accessor :start_proc, :end_proc
+      attr_accessor :qname, :nsuri, :xpath, :ns_regex
+      attr_accessor :start_proc, :end_proc, :properties
 
       def initialize(qname, options = {})
         @qname = qname
@@ -166,6 +187,8 @@ module XML
         @options = options
         @start_proc = nil
         @end_proc = nil
+        @properties = {}
+        @property_mapping = {}
 
         # set the possible default options
         xpath(options[:xpath])
@@ -187,6 +210,24 @@ module XML
         @nsuri = nsuri
       end
 
+      # For multi-versioned schemas where the element is the
+      # same across multiple instance documents, you may
+      # specify a regex match for the namespace.
+
+      def namespace_regex(regex)
+        if regex.is_a? String
+          @ns_regex = Regexp.new(regex)
+        elsif regex.is_a? Regexp
+          @ns_regex = regex
+        else
+          raise ArgumentError, "regex must be a string or a regexp instance"
+        end
+      end
+
+      def property_mappings?
+        @property_mapping.size > 0
+      end
+
       # Set the block that will execute when the mapping is
       # matched.  The parameters to the block will be:
       #
@@ -203,6 +244,38 @@ module XML
 
       def on_end_element(&block)
         @end_proc = block
+      end
+
+      # This method registers a property setter XPath value to
+      # be automacially run when the SAX end element event is
+      # triggered for this mapping.
+
+      def property(key, xpath = nil, nslist = {})
+        if !xpath
+          # we assume that the property comes from a child
+          # element's text node
+          xpath = "./#{key}/text()"
+        end
+        @property_mapping[key] = [ xpath, nslist ]
+      end
+
+      def [](key)
+        @properties[key]
+      end
+
+      def []=(key, val)
+        @properties[key] = val
+      end
+
+      def set_properties(mapper, node)
+        @property_mapping.each do |k,v|
+          self[k] = node.find(v[0], v[1])
+#          puts "self[#{k}] = #{self[k].inspect}"
+        end
+
+        if mapper.respond_to? :mapping_handler
+          mapper.mapping_handler(self, node)
+        end
       end
     end
 
@@ -272,8 +345,12 @@ module XML
       def on_end_element_ns(qname, prefix, uri)
         node = stack[-1]
         mapping = mapping_for(stack, qname, uri, node.nslist)
-        if mapping && mapping.end_proc
-          mapping.end_proc.call(@instance, node)
+        if mapping
+          if mapping.end_proc
+            mapping.end_proc.call(@instance, node)
+          elsif mapping.property_mappings?
+            mapping.set_properties(@instance, node)
+          end
         end
         stack.pop
       end
@@ -305,6 +382,8 @@ module XML
         if mapping && (mapping.nsuri == nsuri \
             || nsuri == @mapper.default_nsuri)
           return mapping
+        elsif mapping && (rx = mapping.ns_regex)
+          return mapping if rx.match nsuri
         end
         nil
       end

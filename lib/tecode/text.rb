@@ -94,7 +94,7 @@ module Text
     val = str
     case val 
       when /^#{HEXDIGIT}$/ then val = val.hex
-      when /^[-+]?0\d+$/ then val = val.oct
+      when /^[-+]?\\0[1-7][0-7][0-7]$/ then val = val.oct
       when /^[-+]?\d+$/ then val = val.to_i
       when /^#{DIGIT}$/ then val = val.to_f
       when /^#{DIGIT}%$/ then val = val.to_f / 100

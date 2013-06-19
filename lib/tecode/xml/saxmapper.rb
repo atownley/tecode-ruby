@@ -26,6 +26,7 @@
 #++
 
 require 'xml'
+require 'libxml'
 
 module TECode
 module XML
@@ -56,11 +57,11 @@ module XML
     end
 
     def find(xpath, nslist = self.nslist)
-      @locator.find(xpath, self)
+      @locator.find(xpath, self, nslist)
     end
 
     def find_first(xpath, nslist = self.nslist)
-      @locator.find_first(xpath, self)
+      @locator.find_first(xpath, self, nslist)
     end
 
     def [](key)
@@ -95,6 +96,9 @@ module XML
       s << qname << ">"
     end
 
+    def to_s
+      "#<#{self.class}:#{self.object_id} @qname = #{qname} @nsuri = #{nsuri} @attributes = #{@attributes.inspect} @text = \"#{text.strip}\">"
+    end
   end
 
   # This class provides a default message handler
@@ -116,6 +120,7 @@ module XML
     end
   end
 
+
   # This module defines classes and methods to help
   # automatically generate XML to object mappings that have
   # full support for XML namespaces.
@@ -123,7 +128,6 @@ module XML
   module Mapping
 
     def self.included(base)
-      base.instance_variable_set("@mappings", {})
       base.extend ClassMethods
     end
 
@@ -140,6 +144,10 @@ module XML
         @mappings
       end
 
+      def handlers
+        @handlers
+      end
+
       def default_nsuri
         @default_ns
       end
@@ -149,6 +157,7 @@ module XML
       end
 
       def mapping(*args, &block)
+        @mappings ||= {}
         if args.length == 1 && args[0].is_a?(Hash)
           qname = args[0].delete(:tag)
           if qname.nil? && args[0][:xpath].nil?
@@ -158,15 +167,28 @@ module XML
         else
           mapping = self.mapper_class.new(*args)
         end
+        # make sure we set the default namespace if given
+        mapping.namespace(@default_ns)
         mapping.instance_eval(&block) if block_given?
         @mappings[mapping.qname] = mapping
       end
 
+      def handler(*args, &block)
+        @handlers ||= {}
+        if args.length == 1 && (ns = @default_ns)
+          key = [ args.first, ns ]
+        else
+          key = args
+        end
+
+        @handlers[key.join(":")] = block
+      end
+
       def parse(str, options = {}, msgs = StdMessageHandler.new)
         if str.is_a? String
-          parser = ::XML::SaxParser.string(str)
+          parser = LibXML::XML::SaxParser.string(str)
         elsif str.is_a? StringIO
-          parser = ::XML::SaxParser.io(str)
+          parser = LibXML::XML::SaxParser.io(str)
         end
         mapper = self.new(options)
         parser.callbacks = SaxHandler.new(self, msgs, mapper)
@@ -192,6 +214,7 @@ module XML
 
         # set the possible default options
         xpath(options[:xpath])
+        namespace(options[:namespace])
       end
 
       # By default, the mapping is triggered whenever the
@@ -256,6 +279,12 @@ module XML
           # element's text node
           xpath = "./#{key}/text()"
         end
+
+        # try to add some efficiency later in the property
+        # setters
+        if nslist.size == 0 && @nsuri
+          nslist[""] = @nsuri
+        end
         @property_mapping[key] = [ xpath, nslist ]
       end
 
@@ -268,8 +297,42 @@ module XML
       end
 
       def set_properties(mapper, node)
+        # make sure we always provide a reference for the node
+        # if further down-stream processing is required
+        self[:node] = [ node ]
+
+        if node.nsuri == @nsuri \
+            || node.nsuri =~ @ns_regex
+          nodens = { (node.prefix || "" ) => @nsuri }
+        else
+          nodens = {}
+        end
+
         @property_mapping.each do |k,v|
-          self[k] = node.find(v[0], v[1])
+          if nodens.size == 1
+            if (nslist = v[1])
+              if nslist.size == 0 
+                nslist = nodens
+              else
+                # FIXME 2013-06-12: ast
+                # This is probably really, really dangerous,
+                # but since this method is only called once we
+                # have a matching node, then the prefix should
+                # automatically be applied to the xpath
+                # expression for the specified namespace,
+                # right?
+                if nslist != node.nsuri
+                  nslist = nodens.merge({ node.prefix => nslist })
+                end
+              end
+            else
+              nslist = nodens
+            end
+          else
+            nslist = v[1]
+          end
+
+          self[k] = node.find(v[0], nslist)
 #          puts "self[#{k}] = #{self[k].inspect}"
         end
 
@@ -351,6 +414,13 @@ module XML
           elsif mapping.property_mappings?
             mapping.set_properties(@instance, node)
           end
+        
+          key = [ qname ]
+          key << uri if uri
+
+          if block = @mapper.handlers[key.join(":")]
+            @instance.instance_exec(mapping, node, &block)
+          end
         end
         stack.pop
       end
@@ -398,5 +468,8 @@ module XML
       end
     end
   end
+
+  # This is a basic default Mapping class that provides
+  # additional 
 end
 end

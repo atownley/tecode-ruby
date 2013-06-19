@@ -71,7 +71,8 @@ module XML
     
     def match(stack, node, ns, nodeset = [])
 #      puts "---"
-#      puts "node: #{node.prefix}:#{node.qname}"
+#      puts "node: #{node.prefix.inspect}:#{node.qname.inspect}"
+#      puts "ns: #{ns.inspect}"
 #      puts "match stack: #{stack.inspect}"
 #      puts "nodeset: #{nodeset.inspect}"
 
@@ -139,20 +140,26 @@ module XML
           prefix = stack.shift
           qname = stack.shift
 
+#puts "prefix: #{prefix.inspect}"
+#puts "qname: #{qname.inspect}"
+#puts "self_only: #{@self_only}"
+
           if stack.size == 0
             if prefix && "" != prefix
-              if node.nslist[prefix] && node.qname == qname
+#puts "A"
+              if node.nsuri == ns[prefix] && node.qname == qname
+#puts "B"
                 nodeset << node
               end
             elsif node.qname == qname
+#puts "C"
               nodeset << node 
             end
           else
-            if prefix && "" != prefix
-              if !node.nslist[prefix] || node.qname != qname
-                stack.clear if @self_only
-              end
-            elsif node.qname != qname
+#puts "D"
+            if qname != node.qname || \
+                (qname == node.qname && ns[prefix] != node.nsuri)
+#puts "E"
               stack.clear if @self_only
             end
           end

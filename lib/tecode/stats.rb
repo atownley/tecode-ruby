@@ -93,6 +93,12 @@ module TECode::Stats
       to_s
     end
 
+    def to_csv
+      s = "#{event.dump}, #{obs_count}, "
+      s << "#{min_time}, #{max_time}, "
+      s << "#{avg_time}, #{total_time}"
+    end
+
     def observe(&block)
       timer = TECode::TimerDecorator.new(self)
       rval = block.call(timer) if block
@@ -146,6 +152,27 @@ module TECode::Stats
 
       @stats.keys.sort.each do |key|
         arr << @stats[key].to_s
+      end
+
+      arr.join("\n")
+    end
+
+    def to_csv
+      s = "Usage statistics"
+      if @ident
+        s << " for #{ident}: "
+      else
+        s << ": "
+      end
+      arr = [ s ]
+      arr << "Key, Count, Min Time, Max Time, AVG Time, Total Time"
+      @counters.keys.sort.each do |key|
+        arr << "#{key.dump}, #{@counters[key]}"
+      end
+      arr << "--" if @counters.size > 0
+
+      @stats.keys.sort.each do |key|
+        arr << @stats[key].to_csv
       end
 
       arr.join("\n")

@@ -127,6 +127,10 @@ module Command
       puts format_usage(@groups)
     end
 
+    def show_help?
+      self["help"].matched? || self["usage"].matched?
+    end
+
     def [](key)
       ( @lnames[key] || @snames[key] || @properties[key] )
     end

@@ -82,6 +82,7 @@ module TECode
 module Text
   DIGIT     = %r{[-+]?\d+(?:\.?\d+)?}
   HEXDIGIT  = %r{[-+]?0x[a-fA-F\d][a-fA-F\d]*}
+  OCTDIGIT  = %r{([-+])?\\?(0[0-7]+)}
   # from here: # http://hcicrossroads.blogspot.com/2011/01/regular-expression-for-multiple-forms.html
   SCIDIGIT  = %r{^[+|-]?\d\.?\d{0,}[E|e|X|x](10)?[\^\*]?[+|-]?\d+$}
   QLITERAL  = %r{(?:"(?:[^"\\]|\\.)*")|'(?:[^'\\]|\\.)*'}
@@ -96,7 +97,7 @@ module Text
     val = str
     case val 
       when /^#{HEXDIGIT}$/ then val = val.hex
-      when /^[-+]?\\0[1-7][0-7][0-7]$/ then val = val.oct
+      when /^#{OCTDIGIT}$/ then val = "#{$1}#{$2}".oct
       when /^[-+]?\d+$/ then val = val.to_i
       when /^#{SCIDIGIT}$/ then val = val.to_f
       when /^#{DIGIT}$/ then val = val.to_f

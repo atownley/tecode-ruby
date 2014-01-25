@@ -165,16 +165,52 @@ def process_bundle(parser, bundle_file, dist = nil, clean_dist = false)
     
   # rename all of the specified files
   (renames = bundle[:rename_list] || bundle[:renamelist] || {}).each do |orig, targ|
+
     orig = expand(orig, bundle)
     targ = expand(targ, bundle)
+
+#    if File.directory? orig
+#      targ = File.join(fpdistdir, targ)
+#      if !File.exist?(dn = File.dirname(targ))
+#        FileUtils.mkdir_p dn
+#      end
+#      puts "cp -r #{File.join(rootdir, orig)} #{targ}"
+#      FileUtils.cp_r(File.join(rootdir, orig), targ)
+#    else
+#      puts "cp #{File.join(rootdir, orig)} #{File.join(fpdistdir, targ)}"
+#      FileUtils.cp(File.join(rootdir, orig), File.join(fpdistdir, targ))
+#    end
+   
+    # Fix for bug where order isn't constant and rename of
+    # directories doesn't work as expected.  Rename of
+    # directories is really a copy of the directory contents
+    # into the new name, so that's what we need to do now.
+
+    orig = File.join(rootdir, orig)
     if File.directory? orig
+      # then we need to make sure we copy all of the contents
+      # of the directory to a new directory with the target
+      # name
       targ = File.join(fpdistdir, targ)
-      if !File.exist?(dn = File.dirname(targ))
-        FileUtils.mkdir_p dn
+      if File.exist?(targ)
+        if !File.directory?(targ)
+          parser.die! 1, "target '#{targ}' exists but not directory!"
+        end
+      else
+        FileUtils.mkdir_p(targ)
       end
-      FileUtils.cp_r(File.join(rootdir, orig), targ)
+
+      # next, we need to make a FileList for the directory
+      # contents
+      Rake::FileList.new(File.join(orig, "*")).each do |f|
+        if File.directory? f
+          FileUtils.cp_r(f, targ)
+        else
+          FileUtils.cp(f, File.join(targ, File.basename(f)))
+        end
+      end
     else
-      FileUtils.cp(File.join(rootdir, orig), File.join(fpdistdir, targ))
+      FileUtils.cp(orig, File.join(fpdistdir, targ))
     end
   end
 

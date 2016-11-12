@@ -25,9 +25,9 @@
 ######################################################################
 #++
 
-$KCODE='u'
-require 'jcode'
-require 'parsedate'
+#$KCODE='u'
+#require 'jcode'
+require 'compat/parsedate'
 
 # From http://blog.evanweaver.com/articles/2006/09/03/smart-plaintext-wrapping/
 # with a few tweaks...

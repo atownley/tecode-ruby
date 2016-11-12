@@ -1,0 +1,127 @@
+#! /usr/bin/env ruby
+######################################################################
+#
+# Copyright 2005-2016, Andrew S. Townley
+#
+# Permission to use, copy, modify, and disribute this software for
+# any purpose with or without fee is hereby granted, provided that
+# the above copyright notices and this permission notice appear in
+# all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHORS DISCLAIM ALL
+# WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS.  IN NO EVENT SHALL THE
+# AUTHORS BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT OR
+# CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+# LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT,
+# NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#
+# File:     jspkg
+# Created:  Sat Feb 13 11:47:11 GMT 2010
+#
+######################################################################
+
+require 'rubygems'
+require 'tempfile'
+require 'fileutils'
+require 'time'
+require 'yaml'
+require 'tecode/command'
+
+
+def check_prop(prop, exit_code, msg)
+  if @pkg[prop].nil?
+    STDERR.puts "error: #{msg} (#{prop}).  Exiting."
+    exit exit_code
+  end
+end
+
+yuicjar = File.join(File.dirname(__FILE__), "../3rd_party/yuicompressor/yuicompressor-2.4.5.jar")
+
+include TECode::Command
+parser = TECode::Command::Parser.new(__FILE__, "[PKG]")
+parser.add_options(OptionGroup.new(
+  Option.new("count",
+      :description => "increment the build count for official builds"),
+
+  Option.new("yui-jar",
+      :description => "specify an alternative location of the YUI jar file",
+      :default => "${YUIHOME}/yuicompressor.jar"),
+
+  Option.new("minify", "m",
+      :description => "minify the generated JavaScript using the YUI compressor")
+  )
+)
+
+parser.execute(ARGV) do |args|
+  packagelist = args.shift
+  if packagelist.nil?
+    packagelist = "package.list"
+  end
+
+  @pkgdir = File.dirname(packagelist)
+  @pkg = YAML.load(File.open(packagelist))
+
+  check_prop(:package_name, 1, "no package name specified")
+  check_prop(:package, 2, "no destination package file specified")
+  check_prop(:files, 3, "no input file list specified")
+  check_prop(:version_major, 4, "no major version specified")
+  check_prop(:version_minor, 5, "no minor version specified")
+  check_prop(:version_release, 6, "version release specified")
+  check_prop(:version_count, 7, "build count specified")
+
+  @pkg[:version_date] = Time.now.utc.xmlschema
+
+  if parser["count"].matched?
+    @pkg[:version_count] += 1
+  else
+    @pkg[:version_count] = "DEVELOPER"
+  end
+
+  @vars = @pkg.clone
+  @vars[:version] = "#{@pkg[:version_major]}.#{@pkg[:version_minor]}.#{@pkg[:version_release]} (Build #{@pkg[:version_count]}; #{@pkg[:version_date]})"
+
+  file = Tempfile.new(@pkg[:package])
+  @pkg[:files].each do |fn|
+    File.open(fn, "r") do |inf|
+      s = inf.read.gsub(/@([-a-zA-Z0-9_]+)@/) do |key|
+        v = @vars[$1.to_sym]
+  #      puts "Found '#{v}' for key: #{$1}"
+        next v if v
+        key
+      end
+      file.write s
+    end
+  end
+  file.flush
+  file.close
+
+  ofn = File.join(@pkgdir, @pkg[:package])
+  if parser["minify"].matched?
+    if (jar = parser["yui-jar"]).matched?
+      yuicjar = jar.value
+    else
+      if !File.exist? yuicjar
+        # try the environment
+        if (yuih = ENV["YUIHOME"])
+          yuicjar = File.join(yuih, "yuicompressor.jar")
+        end
+
+        if !File.exist? yuicjar
+          parser.error("minify requested but unable to locate YUI compressor jar", 1)
+        end
+      end
+    end
+
+    ext = File.extname(ofn)[1..-1]
+    if (rc = system("java -jar #{yuicjar} --type #{ext} #{file.path} -o #{ofn}"))
+      File.delete(file.path)
+      File.open(packagelist, "w+") { |f| f.write @pkg.to_yaml } if @count
+    else
+      parser.error "java process exited with status: #{rc}", rc
+    end
+  else
+    FileUtils.install(file.path, ofn, :mode => 0644)
+  end
+end

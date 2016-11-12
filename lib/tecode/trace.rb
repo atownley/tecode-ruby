@@ -1,7 +1,7 @@
 #--
 ######################################################################
 #
-# Copyright (c) 2005, Andrew S. Townley
+# Copyright (c) 2005-2016, Andrew S. Townley
 # All rights reserved.
 # 
 # Permission to use, copy, modify, and disribute this software for

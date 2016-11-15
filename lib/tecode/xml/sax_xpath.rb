@@ -78,7 +78,8 @@ module XML
 
       case(op = stack.shift)
         when :any
-          # should be fine with this one
+          stack.shift
+          nodeset << node
 
         when :attribute
           case stack.shift
@@ -106,6 +107,7 @@ module XML
 #            puts "child: #{child.prefix}:#{child.qname}"
             match(stack.clone, child, ns, nodeset)
           end
+          stack.clear
 
         when :document
           # if the node has a parent, then it can't be the
@@ -160,7 +162,7 @@ module XML
             if qname != node.qname || \
                 (qname == node.qname && ns[prefix] != node.nsuri)
 #puts "E"
-              stack.clear if @self_only
+#              stack.clear if @self_only
             end
           end
 #          puts "after qname stack: #{stack.inspect}"

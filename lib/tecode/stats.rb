@@ -40,7 +40,7 @@ module TECode::Stats
     end
 
     def record_time(tic)
-      next if !tic
+      return if !tic
       @mutex.synchronize do
         @total_time = @total_time + tic
         @min_time = (tic < @min_time ? tic : @min_time)

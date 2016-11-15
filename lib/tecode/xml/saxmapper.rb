@@ -187,7 +187,7 @@ module XML
       def parse(str, options = {}, msgs = StdMessageHandler.new)
         if str.is_a? String
           parser = LibXML::XML::SaxParser.string(str)
-        elsif str.is_a? StringIO
+        else
           parser = LibXML::XML::SaxParser.io(str)
         end
         mapper = self.new(options)
